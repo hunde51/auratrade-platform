@@ -1,0 +1,11 @@
+fastapi
+uvicorn[standard]
+sqlalchemy[asyncio]
+sqlmodel
+asyncpg
+redis
+celery
+python-jose[cryptography]
+pydantic-settings
+alembic
+python-dotenv

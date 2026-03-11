@@ -1,0 +1,78 @@
+Phase 1 — System Skeleton (Mini-Horizontal Setup)
+
+Goal: Prepare the foundation of the entire system.
+
+Backend Setup
+
+Initialize FastAPI project structure
+
+Setup PostgreSQL connection
+
+Configure SQLAlchemy / SQLModel
+
+Setup Redis
+
+Configure Celery worker
+
+Setup JWT authentication base
+
+Create Docker environment
+
+Setup Alembic migrations
+
+Backend Structure Example
+
+backend/
+ ├── app/
+ │   ├── api/
+ │   ├── core/
+ │   ├── models/
+ │   ├── services/
+ │   ├── tasks/
+ │   ├── websocket/
+ │   └── main.py
+Frontend Setup
+
+Initialize Next.js 14
+
+Setup TypeScript
+
+Install TailwindCSS
+
+Setup global layout
+
+Setup API client (Axios)
+
+Setup React Query or SWR
+
+Setup WebSocket client utility
+
+Frontend Structure
+
+frontend/
+ ├── app/
+ ├── components/
+ ├── hooks/
+ ├── lib/
+ ├── services/
+DevOps
+
+Docker compose
+
+services:
+ backend
+ frontend
+ postgres
+ redis
+ celery-worker
+
+GitHub repo
+
+CI pipeline (basic)
+
+Deliverable
+
+App runs locally
+Frontend connected to FastAPI
+Database connected
+Redis running
