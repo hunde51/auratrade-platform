@@ -12,7 +12,8 @@ import { depositToWallet, withdrawFromWallet } from "@/services/wallet";
 export default function DashboardPage() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [amount, setAmount] = useState("1000");
+  const [depositAmount, setDepositAmount] = useState("1000");
+  const [withdrawAmount, setWithdrawAmount] = useState("1000");
   const token = getAccessToken();
   const enabled = Boolean(token);
   const { data: user, isLoading: userLoading } = useCurrentUser(enabled);
@@ -41,18 +42,14 @@ export default function DashboardPage() {
     },
   });
 
-  function parseAmount(): number {
-    return Number.parseFloat(amount);
-  }
-
   async function handleDeposit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await depositMutation.mutateAsync(parseAmount());
+    await depositMutation.mutateAsync(Number.parseFloat(depositAmount));
   }
 
   async function handleWithdraw(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    await withdrawMutation.mutateAsync(parseAmount());
+    await withdrawMutation.mutateAsync(Number.parseFloat(withdrawAmount));
   }
 
   function handleLogout() {
@@ -87,14 +84,15 @@ export default function DashboardPage() {
           <input
             className="mb-4 w-full rounded-md border border-slate-300 px-4 py-3"
             min="0.01"
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => setDepositAmount(event.target.value)}
             step="0.01"
             type="number"
-            value={amount}
+            value={depositAmount}
           />
           <button className="rounded-md bg-teal-700 px-4 py-2 text-white" disabled={depositMutation.isPending} type="submit">
             Add Funds
           </button>
+          {depositMutation.isError && <p className="mt-3 text-sm text-red-600">Deposit failed.</p>}
         </form>
 
         <form className="rounded-xl bg-white p-6 shadow-sm" onSubmit={handleWithdraw}>
@@ -102,14 +100,15 @@ export default function DashboardPage() {
           <input
             className="mb-4 w-full rounded-md border border-slate-300 px-4 py-3"
             min="0.01"
-            onChange={(event) => setAmount(event.target.value)}
+            onChange={(event) => setWithdrawAmount(event.target.value)}
             step="0.01"
             type="number"
-            value={amount}
+            value={withdrawAmount}
           />
           <button className="rounded-md border border-slate-400 px-4 py-2" disabled={withdrawMutation.isPending} type="submit">
             Withdraw Funds
           </button>
+          {withdrawMutation.isError && <p className="mt-3 text-sm text-red-600">Withdraw failed.</p>}
         </form>
       </section>
 
