@@ -6,6 +6,7 @@ asyncpg
 redis
 celery
 python-jose[cryptography]
+pwdlib
 pydantic-settings
 alembic
 python-dotenv
