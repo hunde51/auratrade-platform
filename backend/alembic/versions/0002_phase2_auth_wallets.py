@@ -8,6 +8,7 @@ Create Date: 2026-03-12 00:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision = "0002_phase2_auth_wallets"
@@ -16,7 +17,7 @@ branch_labels = None
 depends_on = None
 
 
-transaction_type = sa.Enum("deposit", "withdraw", "trade", name="transaction_type")
+transaction_type = postgresql.ENUM("deposit", "withdraw", "trade", name="transaction_type", create_type=False)
 
 
 def upgrade() -> None:
