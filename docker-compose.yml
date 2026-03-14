@@ -1,4 +1,32 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: auratrade-postgres
+    environment:
+      POSTGRES_DB: aura_ledger
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: h12@34aHUNDE
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d aura_ledger"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: auratrade-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   backend:
     build:
       context: ./backend
@@ -11,43 +39,17 @@ services:
     ports:
       - "8000:8000"
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health/ready')"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
     volumes:
       - ./backend:/app
-
-  frontend:
-    build:
-      context: ./frontend
-    container_name: auratrade-frontend
-    environment:
-      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
-      - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-
-  postgres:
-    image: postgres:16-alpine
-    container_name: auratrade-postgres
-    environment:
-      POSTGRES_DB: aura_ledger
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: h12@34aHUNDE
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-
-  redis:
-    image: redis:7-alpine
-    container_name: auratrade-redis
-    ports:
-      - "6379:6379"
 
   celery-worker:
     build:
@@ -60,11 +62,31 @@ services:
       REDIS_HOST: redis
     command: celery -A app.tasks.celery_app:celery_app worker --loglevel=info
     depends_on:
-      - backend
-      - redis
-      - postgres
+      backend:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     volumes:
       - ./backend:/app
+
+  frontend:
+    build:
+      context: ./frontend
+    container_name: auratrade-frontend
+    profiles: ["frontend"]
+    environment:
+      - NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api/v1
+      - NEXT_PUBLIC_WS_URL=ws://localhost:8000/ws
+    ports:
+      - "3000:3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
 volumes:
   postgres_data:

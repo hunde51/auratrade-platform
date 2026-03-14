@@ -6,6 +6,8 @@ asyncpg
 redis
 celery
 python-jose[cryptography]
+passlib[bcrypt]
+bcrypt
 pwdlib
 argon2-cffi
 pydantic-settings
