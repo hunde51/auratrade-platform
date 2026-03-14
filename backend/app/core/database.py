@@ -1,5 +1,6 @@
 from collections.abc import AsyncGenerator
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase
 
@@ -17,3 +18,13 @@ AsyncSessionLocal = async_sessionmaker(bind=engine, class_=AsyncSession, expire_
 async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     async with AsyncSessionLocal() as session:
         yield session
+
+
+async def check_database_connection() -> None:
+    """Raise if database is unreachable."""
+    async with AsyncSessionLocal() as session:
+        await session.execute(text("SELECT 1"))
+
+
+async def close_database_engine() -> None:
+    await engine.dispose()
