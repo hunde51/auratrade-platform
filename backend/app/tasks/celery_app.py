@@ -4,8 +4,8 @@ from app.core.config import settings
 
 celery_app = Celery(
     "auratrade",
-    broker=settings.redis_url,
-    backend=settings.redis_url,
+    broker=settings.celery_broker_url,
+    backend=settings.celery_result_backend,
     include=["app.tasks.worker"],
 )
 
