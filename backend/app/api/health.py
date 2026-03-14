@@ -1,19 +1,27 @@
 from fastapi import APIRouter, HTTPException, status
 from redis.exceptions import RedisError
-from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
-from app.core.database import AsyncSessionLocal
-from app.core.redis import redis_client
+from app.core.database import check_database_connection
+from app.core.redis import check_redis_connection
 
 router = APIRouter(prefix="/health", tags=["health"])
 
 
 @router.get("")
 async def health_check() -> dict[str, str]:
+    return await readiness_check()
+
+
+@router.get("/live")
+async def liveness_check() -> dict[str, str]:
+    return {"status": "alive"}
+
+
+@router.get("/ready")
+async def readiness_check() -> dict[str, str]:
     try:
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
+        await check_database_connection()
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -21,7 +29,7 @@ async def health_check() -> dict[str, str]:
         ) from exc
 
     try:
-        await redis_client.ping()
+        await check_redis_connection()
     except RedisError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
