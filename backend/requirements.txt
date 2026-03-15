@@ -1,10 +1,13 @@
 fastapi
 uvicorn[standard]
+gunicorn
 sqlalchemy[asyncio]
 sqlmodel
 asyncpg
 redis
 celery
+httpx
+apscheduler
 python-jose[cryptography]
 passlib[bcrypt]
 bcrypt
@@ -13,3 +16,5 @@ argon2-cffi
 pydantic-settings
 alembic
 python-dotenv
+pytest
+pytest-asyncio
