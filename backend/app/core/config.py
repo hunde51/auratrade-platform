@@ -27,6 +27,30 @@ class Settings(BaseSettings):
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_channel_market_prices: str = "market_prices"
+    redis_channel_ticker_updates: str = "ticker_updates"
+
+    market_cache_prefix: str = "market_prices"
+    market_cache_ttl_seconds: int = 5
+    market_poll_interval_seconds: int = 2
+    market_default_symbols: list[str] = ["AAPL", "MSFT", "TSLA", "BTCUSD", "ETHUSD"]
+    market_api_timeout_seconds: float = 5.0
+    market_max_retries: int = 3
+    market_retry_base_seconds: float = 0.5
+
+    alpaca_poll_interval_seconds: int = 2
+    polygon_poll_interval_seconds: int = 2
+    alpha_vantage_poll_interval_seconds: int = 15
+
+    alpaca_api_key: str | None = None
+    alpaca_api_secret: str | None = None
+    alpaca_base_url: str = "https://data.alpaca.markets"
+
+    polygon_api_key: str | None = None
+    polygon_base_url: str = "https://api.polygon.io"
+
+    alpha_vantage_api_key: str | None = None
+    alpha_vantage_base_url: str = "https://www.alphavantage.co"
 
     jwt_secret_key: str = Field(default="change-me-in-production")
     jwt_algorithm: str = "HS256"
