@@ -13,12 +13,14 @@ from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.router import api_router
+from app.api.websocket_routes import router as websocket_router
 from app.core.config import settings
 from app.core.database import check_database_connection, close_database_engine
 from app.core.logging import configure_logging
 from app.core.redis import check_redis_connection, close_redis_connection, redis_client
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
 from app.services.market_data_service import market_data_service
+from app.services.notification_service import notification_service
 from app.services.websocket_manager import ws_market_manager
 
 configure_logging()
@@ -85,6 +87,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     scheduler.start()
 
     redis_listener_task = asyncio.create_task(redis_market_broadcast_loop())
+    await notification_service.start()
 
     logger.info("app.startup.complete")
     yield
@@ -93,6 +96,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     redis_listener_task.cancel()
     with contextlib.suppress(asyncio.CancelledError):
         await redis_listener_task
+    await notification_service.stop()
 
     await close_redis_connection()
     await close_database_engine()
@@ -108,6 +112,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(api_router)
+app.include_router(websocket_router)
 
 
 @app.get("/")

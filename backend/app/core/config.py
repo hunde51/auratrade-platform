@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     redis_db: int = 0
     redis_channel_market_prices: str = "market_prices"
     redis_channel_ticker_updates: str = "ticker_updates"
+    redis_channel_alerts: str = "alerts"
+    redis_channel_trades: str = "trades"
+    redis_channel_wallets: str = "wallets"
 
     market_cache_prefix: str = "market_prices"
     market_cache_ttl_seconds: int = 5
