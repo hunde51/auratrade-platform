@@ -1,10 +1,12 @@
 from decimal import Decimal
+import logging
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.core.redis import redis_client
+from app.events.event_publisher import event_publisher
 from app.models.order import Order, OrderStatus
 from app.repositories.order_repository import create_order, list_orders_for_user
 from app.repositories.position_repository import list_positions_for_user
@@ -12,6 +14,8 @@ from app.repositories.trade_repository import list_trades_for_user
 from app.schemas.market import MarketQuote
 from app.schemas.order import CreateOrderRequest
 from app.services.trading_engine import execute_order
+
+logger = logging.getLogger(__name__)
 
 
 def _normalize_symbol(symbol: str) -> str:
@@ -64,6 +68,37 @@ async def place_order(session: AsyncSession, *, user_id: int, payload: CreateOrd
 
         if trade is None:
             return executed_order, "pending"
+
+        try:
+            trade_payload = {
+                "order_id": trade.order_id,
+                "trade_id": trade.id,
+                "symbol": trade.symbol,
+                "side": trade.side.value,
+                "price": str(trade.price),
+                "quantity": str(trade.quantity),
+            }
+            await event_publisher.publish_trade_confirmed(user_id, trade_payload)
+            await event_publisher.publish_order_filled(
+                user_id,
+                {
+                    "order_id": executed_order.id,
+                    "symbol": executed_order.symbol,
+                    "status": executed_order.status.value,
+                },
+            )
+            await event_publisher.publish_wallet_updated(
+                user_id,
+                {
+                    "wallet_id": _wallet.id,
+                    "balance": str(_wallet.balance),
+                    "reason": "trade_execution",
+                },
+            )
+        except Exception:
+            # Notification failures should not roll back an already committed trade.
+            logger.exception("notification.publish.order_flow.error", extra={"user_id": user_id, "order_id": executed_order.id})
+
         return executed_order, "filled"
     except Exception:
         await session.rollback()
