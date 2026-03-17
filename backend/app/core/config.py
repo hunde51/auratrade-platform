@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     redis_channel_alerts: str = "alerts"
     redis_channel_trades: str = "trades"
     redis_channel_wallets: str = "wallets"
+    redis_channel_sentiment_updates: str = "sentiment_updates"
 
     market_cache_prefix: str = "market_prices"
     market_cache_ttl_seconds: int = 5
@@ -54,6 +55,17 @@ class Settings(BaseSettings):
 
     alpha_vantage_api_key: str | None = None
     alpha_vantage_base_url: str = "https://www.alphavantage.co"
+
+    ai_provider: str = "gemini"
+    ai_api_key: str | None = None
+    ai_timeout_seconds: float = 8.0
+    sentiment_cache_ttl_seconds: int = 45
+
+    gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
+    gemini_model: str = "gemini-1.5-flash"
+
+    openai_base_url: str = "https://api.openai.com/v1"
+    openai_model: str = "gpt-4o-mini"
 
     jwt_secret_key: str = Field(default="change-me-in-production")
     jwt_algorithm: str = "HS256"
