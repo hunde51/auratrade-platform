@@ -5,6 +5,7 @@ from app.schemas.market import MarketListResponse, MarketQuote, MarketSnapshotEv
 from app.schemas.notification import NotificationEvent, NotificationEventType
 from app.schemas.order import CreateOrderRequest, OrderResponse
 from app.schemas.position import PositionResponse
+from app.schemas.sentiment import SentimentResponse
 from app.schemas.trade import TradeResponse
 from app.schemas.wallet import TransactionResponse, WalletMutationRequest, WalletResponse
 
@@ -26,4 +27,5 @@ __all__ = [
     "OrderResponse",
     "TradeResponse",
     "PositionResponse",
+    "SentimentResponse",
 ]

@@ -1,5 +1,6 @@
 from app.models.order import Order, OrderSide, OrderStatus, OrderType
 from app.models.position import Position
+from app.models.sentiment import SentimentLabel, SentimentSignal
 from app.models.trade import Trade
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User
@@ -11,6 +12,8 @@ __all__ = [
     "OrderStatus",
     "OrderType",
     "Position",
+    "SentimentLabel",
+    "SentimentSignal",
     "Trade",
     "Transaction",
     "TransactionType",
