@@ -53,6 +53,10 @@ class WebSocketManager:
                         self._channel_connections.pop(channel, None)
             self._socket_channels.pop(websocket, None)
 
+    async def connection_count(self) -> int:
+        async with self._lock:
+            return len(self._socket_channels)
+
     async def broadcast(self, channel: str, message: str) -> None:
         normalized_channel = self._normalize_channel(channel)
         async with self._lock:
