@@ -60,6 +60,7 @@ class Settings(BaseSettings):
     ai_api_key: str | None = None
     ai_timeout_seconds: float = 8.0
     sentiment_cache_ttl_seconds: int = 45
+    coach_cache_ttl_seconds: int = 60
 
     gemini_base_url: str = "https://generativelanguage.googleapis.com/v1beta"
     gemini_model: str = "gemini-1.5-flash"
