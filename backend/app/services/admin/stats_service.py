@@ -8,6 +8,7 @@ from app.models.position import Position
 from app.models.trade import Trade
 from app.models.user import User
 from app.models.wallet import Wallet
+from app.schemas.admin.series import AdminTimeSeriesPoint
 from app.schemas.admin.stats import AdminStatsResponse
 
 
@@ -38,6 +39,21 @@ class AdminStatsService:
         )
         await self._to_cache(stats)
         return stats
+
+    async def user_growth(self, *, months: int = 6) -> list[AdminTimeSeriesPoint]:
+        stmt = (
+            select(func.date_trunc("month", User.created_at).label("bucket"), func.count(User.id).label("count"))
+            .group_by("bucket")
+            .order_by("bucket")
+            .limit(max(1, min(months, 24)))
+        )
+        result = await self._session.execute(stmt)
+
+        return [
+            AdminTimeSeriesPoint(label=row.bucket.strftime("%b"), value=int(row.count))
+            for row in result.all()
+            if row.bucket is not None
+        ]
 
     async def _from_cache(self) -> AdminStatsResponse | None:
         try:
