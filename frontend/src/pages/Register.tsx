@@ -7,7 +7,7 @@ import { APP_NAME } from '@/lib/constants';
 import { Eye, EyeOff } from 'lucide-react';
 
 export default function RegisterPage() {
-  const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -26,11 +26,11 @@ export default function RegisterPage() {
     setLoading(true);
     setError('');
     try {
-      const user = await registerUser(email, password, name);
+      const user = await registerUser(email, password, username);
       setUser(user);
       navigate('/dashboard');
-    } catch {
-      setError('Registration failed');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -57,8 +57,8 @@ export default function RegisterPage() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="text-xs text-muted-foreground mb-1 block">Full Name</label>
-              <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+              <label className="text-xs text-muted-foreground mb-1 block">Username</label>
+              <input type="text" value={username} onChange={(e) => setUsername(e.target.value)}
                 className="w-full h-10 px-3 rounded-md bg-secondary border border-border text-sm focus:outline-none focus:ring-1 focus:ring-primary" required />
             </div>
             <div>

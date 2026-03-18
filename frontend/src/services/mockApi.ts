@@ -1,251 +1,382 @@
 import type {
-  User, Wallet, MarketPrice, Order, Position, Trade,
-  SentimentData, VolatilityPrediction, AIInsight, NewsItem,
-  AdminStats, SystemHealth, CandleData,
-} from '@/lib/types';
-import { randomBetween } from '@/lib/format';
+  AIInsight,
+  CandleData,
+  MarketPrice,
+  NewsItem,
+  Order,
+  Position,
+  SentimentData,
+  Trade,
+  User,
+  VolatilityPrediction,
+  Wallet,
+} from "@/lib/types";
+import { SYMBOLS } from "@/lib/constants";
+import { apiRequest, clearAccessToken, setAccessToken } from "@/services/http";
 
-// ─── Mock User ───
-const mockUser: User = {
-  id: '1',
-  email: 'trader@auratrade.com',
-  name: 'Alex Morgan',
-  role: 'admin',
-  createdAt: '2024-01-15T10:00:00Z',
+type AuthResponse = {
+  access_token: string;
+  token_type: string;
 };
 
-// ─── Mock Wallet ───
-const mockWallet: Wallet = {
-  balance: 100000,
-  equity: 104520.50,
-  marginUsed: 12400,
-  freeMargin: 92120.50,
-  dailyPnL: 2340.50,
-  dailyPnLPercent: 2.34,
-  totalPnL: 4520.50,
+type UserResponse = {
+  id: number;
+  email: string;
+  username: string;
+  role: "user" | "admin";
+  is_active: boolean;
 };
 
-// ─── Mock Market Prices ───
-const basePrices: Record<string, { price: number; name: string }> = {
-  'BTC/USD': { price: 67432.50, name: 'Bitcoin' },
-  'ETH/USD': { price: 3521.80, name: 'Ethereum' },
-  'AAPL': { price: 189.45, name: 'Apple Inc.' },
-  'TSLA': { price: 248.90, name: 'Tesla Inc.' },
-  'GOOGL': { price: 141.20, name: 'Alphabet Inc.' },
-  'AMZN': { price: 178.30, name: 'Amazon.com' },
-  'MSFT': { price: 415.60, name: 'Microsoft' },
-  'SOL/USD': { price: 142.75, name: 'Solana' },
+type WalletResponse = {
+  id: number;
+  user_id: number;
+  balance: string | number;
 };
 
-function generateMarketPrices(): MarketPrice[] {
-  return Object.entries(basePrices).map(([symbol, { price, name }]) => {
-    const change = randomBetween(-price * 0.03, price * 0.03);
-    const currentPrice = price + change;
+type MarketListResponse = {
+  items: Array<{
+    symbol: string;
+    price: number;
+    volume: number;
+    change_percent: number | null;
+    source: string;
+    timestamp: string;
+  }>;
+};
+
+type PositionResponse = {
+  id: number;
+  user_id: number;
+  symbol: string;
+  quantity: string | number;
+  average_price: string | number;
+  updated_at: string;
+};
+
+type TradeResponse = {
+  id: number;
+  order_id: number;
+  user_id: number;
+  symbol: string;
+  price: string | number;
+  quantity: string | number;
+  side: "buy" | "sell";
+  executed_at: string;
+};
+
+type OrderResponse = {
+  id: number;
+  user_id: number;
+  symbol: string;
+  order_type: "market" | "limit";
+  side: "buy" | "sell";
+  price: string | number | null;
+  quantity: string | number;
+  status: "pending" | "filled" | "cancelled";
+  created_at: string;
+};
+
+type SentimentResponse = {
+  symbol: string;
+  sentiment: "bullish" | "bearish" | "neutral";
+  score: number;
+  source: string;
+  created_at: string | null;
+};
+
+type VolatilityResponse = {
+  symbol: string;
+  current_volatility: number;
+  predicted_volatility: number;
+  direction: "increasing" | "decreasing" | "stable";
+  confidence: number;
+};
+
+type InsightResponse = {
+  id: string;
+  title: string;
+  summary: string;
+  sentiment: "bullish" | "bearish" | "neutral";
+  confidence: number;
+  timestamp: string;
+};
+
+type NewsResponse = {
+  id: string;
+  title: string;
+  source: string;
+  sentiment: "positive" | "negative" | "neutral";
+  timestamp: string;
+};
+
+type CandleResponse = {
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+};
+
+const symbolNameMap = new Map(SYMBOLS.map((item) => [item.symbol.replace("/", ""), item.name]));
+
+function toNumber(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) {
+    return 0;
+  }
+  if (typeof value === "number") {
+    return value;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mapUser(input: UserResponse): User {
+  return {
+    id: String(input.id),
+    email: input.email,
+    name: input.username,
+    role: input.role,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export async function getUser(): Promise<User> {
+  const user = await apiRequest<UserResponse>("/auth/me");
+  return mapUser(user);
+}
+
+export async function loginUser(email: string, password: string): Promise<User> {
+  const auth = await apiRequest<AuthResponse>("/auth/login", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ email, password }),
+  });
+  setAccessToken(auth.access_token);
+  return getUser();
+}
+
+export async function registerUser(email: string, password: string, username: string): Promise<User> {
+  const auth = await apiRequest<AuthResponse>("/auth/register", {
+    method: "POST",
+    auth: false,
+    body: JSON.stringify({ email, password, username }),
+  });
+  setAccessToken(auth.access_token);
+  return getUser();
+}
+
+export function logoutUser(): void {
+  clearAccessToken();
+}
+
+export async function getWallet(): Promise<Wallet> {
+  const wallet = await apiRequest<WalletResponse>("/wallet");
+  const balance = toNumber(wallet.balance);
+  const marginUsed = balance * 0.12;
+  const freeMargin = Math.max(0, balance - marginUsed);
+
+  return {
+    balance,
+    equity: balance,
+    marginUsed,
+    freeMargin,
+    dailyPnL: 0,
+    dailyPnLPercent: 0,
+    totalPnL: 0,
+  };
+}
+
+export async function getMarketPrices(): Promise<MarketPrice[]> {
+  const payload = await apiRequest<MarketListResponse>("/markets", { auth: false });
+  return payload.items.map((item) => {
+    const normalizedSymbol = item.symbol.replace("/", "");
+    const name = symbolNameMap.get(normalizedSymbol) || item.symbol;
     return {
-      symbol,
+      symbol: item.symbol,
       name,
-      price: currentPrice,
-      change,
-      changePercent: (change / price) * 100,
-      high24h: currentPrice * 1.02,
-      low24h: currentPrice * 0.98,
-      volume: randomBetween(1e6, 5e9),
+      price: item.price,
+      change: ((item.change_percent ?? 0) / 100) * item.price,
+      changePercent: item.change_percent ?? 0,
+      high24h: item.price,
+      low24h: item.price,
+      volume: item.volume,
     };
   });
 }
 
-// ─── Mock Positions ───
-const mockPositions: Position[] = [
-  { id: '1', symbol: 'BTC/USD', side: 'long', quantity: 0.5, entryPrice: 65000, currentPrice: 67432, pnl: 1216, pnlPercent: 3.74, timestamp: '2024-03-10T14:30:00Z' },
-  { id: '2', symbol: 'ETH/USD', side: 'long', quantity: 5, entryPrice: 3400, currentPrice: 3521, pnl: 605, pnlPercent: 3.56, timestamp: '2024-03-11T09:15:00Z' },
-  { id: '3', symbol: 'TSLA', side: 'short', quantity: 10, entryPrice: 255, currentPrice: 248.9, pnl: 61, pnlPercent: 2.39, timestamp: '2024-03-12T11:00:00Z' },
-  { id: '4', symbol: 'AAPL', side: 'long', quantity: 20, entryPrice: 185, currentPrice: 189.45, pnl: 89, pnlPercent: 2.41, timestamp: '2024-03-12T13:45:00Z' },
-];
-
-// ─── Mock Trades ───
-const mockTrades: Trade[] = [
-  { id: '1', symbol: 'BTC/USD', side: 'buy', quantity: 0.5, price: 65000, total: 32500, timestamp: '2024-03-10T14:30:00Z' },
-  { id: '2', symbol: 'ETH/USD', side: 'buy', quantity: 5, price: 3400, total: 17000, timestamp: '2024-03-11T09:15:00Z' },
-  { id: '3', symbol: 'TSLA', side: 'sell', quantity: 10, price: 255, total: 2550, timestamp: '2024-03-12T11:00:00Z' },
-  { id: '4', symbol: 'AAPL', side: 'buy', quantity: 20, price: 185, total: 3700, timestamp: '2024-03-12T13:45:00Z' },
-  { id: '5', symbol: 'GOOGL', side: 'buy', quantity: 15, price: 138, total: 2070, timestamp: '2024-03-12T15:20:00Z' },
-  { id: '6', symbol: 'SOL/USD', side: 'buy', quantity: 50, price: 135, total: 6750, timestamp: '2024-03-13T08:10:00Z' },
-];
-
-// ─── Mock Orders ───
-const mockOrders: Order[] = [
-  { id: '1', symbol: 'BTC/USD', side: 'buy', type: 'limit', quantity: 0.25, price: 67000, limitPrice: 64000, status: 'open', timestamp: '2024-03-13T10:00:00Z' },
-  { id: '2', symbol: 'MSFT', side: 'buy', type: 'limit', quantity: 10, price: 415, limitPrice: 400, status: 'open', timestamp: '2024-03-13T10:30:00Z' },
-];
-
-// ─── Mock Sentiment ───
-const mockSentiment: SentimentData = {
-  overall: 'bullish',
-  score: 72,
-  fearGreedIndex: 68,
-  sources: [
-    { name: 'Social Media', sentiment: 'bullish', score: 78 },
-    { name: 'News Articles', sentiment: 'bullish', score: 65 },
-    { name: 'Technical Analysis', sentiment: 'neutral', score: 52 },
-    { name: 'On-chain Data', sentiment: 'bullish', score: 80 },
-  ],
-};
-
-// ─── Mock Volatility ───
-const mockVolatility: VolatilityPrediction[] = [
-  { symbol: 'BTC/USD', currentVolatility: 42, predictedVolatility: 55, direction: 'increasing', confidence: 78 },
-  { symbol: 'ETH/USD', currentVolatility: 38, predictedVolatility: 35, direction: 'decreasing', confidence: 82 },
-  { symbol: 'TSLA', currentVolatility: 55, predictedVolatility: 60, direction: 'increasing', confidence: 65 },
-];
-
-// ─── Mock AI Insights ───
-const mockInsights: AIInsight[] = [
-  { id: '1', title: 'BTC Breakout Expected', summary: 'Market sentiment is bullish due to strong earnings reports and ETF inflows. Bitcoin likely to test $70k resistance.', sentiment: 'bullish', confidence: 85, timestamp: '2024-03-13T08:00:00Z' },
-  { id: '2', title: 'TSLA Earnings Watch', summary: 'Tesla earnings next week may cause increased volatility. Consider hedging long positions.', sentiment: 'neutral', confidence: 72, timestamp: '2024-03-13T07:30:00Z' },
-  { id: '3', title: 'ETH Network Upgrade', summary: 'Upcoming Ethereum network upgrade could drive price appreciation. On-chain metrics are positive.', sentiment: 'bullish', confidence: 78, timestamp: '2024-03-13T06:00:00Z' },
-  { id: '4', title: 'Fed Rate Decision Impact', summary: 'Federal Reserve likely to hold rates. Markets may rally on dovish commentary.', sentiment: 'bullish', confidence: 68, timestamp: '2024-03-12T22:00:00Z' },
-];
-
-// ─── Mock News ───
-const mockNews: NewsItem[] = [
-  { id: '1', title: 'Bitcoin ETF sees record inflows of $1.2B', source: 'Bloomberg', sentiment: 'positive', timestamp: '2024-03-13T09:00:00Z' },
-  { id: '2', title: 'Fed signals potential rate cuts in Q3', source: 'Reuters', sentiment: 'positive', timestamp: '2024-03-13T08:30:00Z' },
-  { id: '3', title: 'Tech stocks rally on AI optimism', source: 'CNBC', sentiment: 'positive', timestamp: '2024-03-13T07:45:00Z' },
-  { id: '4', title: 'Regulatory concerns weigh on crypto markets', source: 'CoinDesk', sentiment: 'negative', timestamp: '2024-03-13T07:00:00Z' },
-  { id: '5', title: 'Apple announces new AI features', source: 'TechCrunch', sentiment: 'positive', timestamp: '2024-03-13T06:30:00Z' },
-];
-
-// ─── Mock Admin Stats ───
-const mockAdminStats: AdminStats = {
-  totalUsers: 12847,
-  totalTrades: 284521,
-  totalVolume: 1284000000,
-  paperLiquidity: 5420000000,
-  activeUsers: 3421,
-  apiCalls: 1842000,
-};
-
-const mockSystemHealth: SystemHealth = {
-  status: 'healthy',
-  uptime: 99.97,
-  cpuUsage: 34,
-  memoryUsage: 62,
-  apiLatency: 12,
-  workerStatus: 'running',
-  lastUpdated: new Date().toISOString(),
-};
-
-// ─── Generate Candle Data ───
-function generateCandles(basePrice: number, count = 100): CandleData[] {
-  const candles: CandleData[] = [];
-  let price = basePrice;
-  const now = Math.floor(Date.now() / 1000);
-
-  for (let i = count; i > 0; i--) {
-    const open = price;
-    const change = randomBetween(-price * 0.015, price * 0.015);
-    const close = open + change;
-    const high = Math.max(open, close) + randomBetween(0, price * 0.005);
-    const low = Math.min(open, close) - randomBetween(0, price * 0.005);
-    candles.push({
-      time: now - i * 3600,
-      open,
-      high,
-      low,
-      close,
-      volume: randomBetween(100, 10000),
-    });
-    price = close;
-  }
-  return candles;
-}
-
-// ─── Mock API Functions ───
-const delay = (ms = 300) => new Promise(r => setTimeout(r, ms));
-
-export async function getUser(): Promise<User> {
-  await delay();
-  return mockUser;
-}
-
-export async function getWallet(): Promise<Wallet> {
-  await delay();
-  return { ...mockWallet };
-}
-
-export async function getMarketPrices(): Promise<MarketPrice[]> {
-  await delay(100);
-  return generateMarketPrices();
-}
-
 export async function getPositions(): Promise<Position[]> {
-  await delay();
-  return [...mockPositions];
+  const rows = await apiRequest<PositionResponse[]>("/positions");
+  return rows.map((row) => {
+    const entryPrice = toNumber(row.average_price);
+    return {
+      id: String(row.id),
+      symbol: row.symbol,
+      side: "long",
+      quantity: toNumber(row.quantity),
+      entryPrice,
+      currentPrice: entryPrice,
+      pnl: 0,
+      pnlPercent: 0,
+      timestamp: row.updated_at,
+    };
+  });
 }
 
 export async function getTrades(): Promise<Trade[]> {
-  await delay();
-  return [...mockTrades];
+  const rows = await apiRequest<TradeResponse[]>("/trades");
+  return rows.map((row) => {
+    const price = toNumber(row.price);
+    const quantity = toNumber(row.quantity);
+    return {
+      id: String(row.id),
+      symbol: row.symbol,
+      side: row.side,
+      quantity,
+      price,
+      total: price * quantity,
+      timestamp: row.executed_at,
+    };
+  });
 }
 
 export async function getOrders(): Promise<Order[]> {
-  await delay();
-  return [...mockOrders];
+  const rows = await apiRequest<OrderResponse[]>("/orders");
+  return rows.map((row) => {
+    const price = toNumber(row.price);
+    const quantity = toNumber(row.quantity);
+    return {
+      id: String(row.id),
+      symbol: row.symbol,
+      side: row.side,
+      type: row.order_type,
+      quantity,
+      price,
+      status: row.status === "pending" ? "open" : row.status,
+      timestamp: row.created_at,
+    };
+  });
 }
 
-export async function placeOrder(order: Omit<Order, 'id' | 'status' | 'timestamp'>): Promise<Order> {
-  await delay(500);
-  const newOrder: Order = {
-    ...order,
-    id: String(Date.now()),
-    status: order.type === 'market' ? 'filled' : 'open',
-    timestamp: new Date().toISOString(),
+export async function placeOrder(order: Omit<Order, "id" | "status" | "timestamp">): Promise<Order> {
+  const payload = {
+    symbol: order.symbol,
+    side: order.side,
+    order_type: order.type,
+    quantity: order.quantity,
+    price: order.type === "limit" ? order.limitPrice ?? order.price : null,
   };
-  return newOrder;
+
+  const created = await apiRequest<OrderResponse>("/orders", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+
+  const price = toNumber(created.price ?? order.price);
+  return {
+    id: String(created.id),
+    symbol: created.symbol,
+    side: created.side,
+    type: created.order_type,
+    quantity: toNumber(created.quantity),
+    price,
+    limitPrice: created.order_type === "limit" ? price : undefined,
+    status: created.status === "pending" ? "open" : created.status,
+    timestamp: created.created_at,
+  };
 }
 
 export async function getSentiment(): Promise<SentimentData> {
-  await delay();
-  return { ...mockSentiment };
+  const rows = await apiRequest<SentimentResponse[]>("/ai/sentiment", { auth: false });
+  if (rows.length === 0) {
+    return {
+      overall: "neutral",
+      score: 0,
+      fearGreedIndex: 50,
+      sources: [],
+    };
+  }
+
+  const bullish = rows.filter((row) => row.sentiment === "bullish").length;
+  const bearish = rows.filter((row) => row.sentiment === "bearish").length;
+  const neutral = rows.length - bullish - bearish;
+  const sumScore = rows.reduce((acc, row) => {
+    if (row.sentiment === "bullish") {
+      return acc + row.score;
+    }
+    if (row.sentiment === "bearish") {
+      return acc - row.score;
+    }
+    return acc;
+  }, 0);
+
+  const avgDirectional = sumScore / rows.length;
+  const sentimentScore = Math.round(avgDirectional * 100);
+  const fearGreedIndex = Math.min(100, Math.max(0, 50 + sentimentScore / 2));
+
+  let overall: "bullish" | "bearish" | "neutral" = "neutral";
+  if (bullish > bearish) {
+    overall = "bullish";
+  } else if (bearish > bullish) {
+    overall = "bearish";
+  }
+
+  return {
+    overall,
+    score: sentimentScore,
+    fearGreedIndex,
+    sources: [
+      { name: "Bullish signals", sentiment: "bullish", score: bullish },
+      { name: "Bearish signals", sentiment: "bearish", score: bearish },
+      { name: "Neutral signals", sentiment: "neutral", score: neutral },
+    ],
+  };
 }
 
 export async function getVolatility(): Promise<VolatilityPrediction[]> {
-  await delay();
-  return [...mockVolatility];
+  const rows = await apiRequest<VolatilityResponse[]>("/ai/volatility", { auth: false });
+  return rows.map((row) => ({
+    symbol: row.symbol,
+    currentVolatility: row.current_volatility,
+    predictedVolatility: row.predicted_volatility,
+    direction: row.direction,
+    confidence: row.confidence,
+  }));
 }
 
 export async function getInsights(): Promise<AIInsight[]> {
-  await delay();
-  return [...mockInsights];
+  const rows = await apiRequest<InsightResponse[]>("/ai/insights", { auth: false });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    summary: row.summary,
+    sentiment: row.sentiment,
+    confidence: row.confidence,
+    timestamp: row.timestamp,
+  }));
 }
 
 export async function getNews(): Promise<NewsItem[]> {
-  await delay();
-  return [...mockNews];
-}
-
-export async function getAdminStats(): Promise<AdminStats> {
-  await delay();
-  return { ...mockAdminStats };
-}
-
-export async function getSystemHealth(): Promise<SystemHealth> {
-  await delay();
-  return { ...mockSystemHealth, lastUpdated: new Date().toISOString() };
+  const rows = await apiRequest<NewsResponse[]>("/ai/news", { auth: false });
+  return rows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    source: row.source,
+    sentiment: row.sentiment,
+    timestamp: row.timestamp,
+  }));
 }
 
 export async function getCandles(symbol: string): Promise<CandleData[]> {
-  await delay(200);
-  const base = basePrices[symbol]?.price ?? 100;
-  return generateCandles(base);
-}
-
-export async function loginUser(_email: string, _password: string): Promise<User> {
-  await delay(800);
-  return mockUser;
-}
-
-export async function registerUser(_email: string, _password: string, _name: string): Promise<User> {
-  await delay(800);
-  return mockUser;
+  const rows = await apiRequest<CandleResponse[]>(`/markets/${encodeURIComponent(symbol)}/candles?points=72`, {
+    auth: false,
+  });
+  return rows.map((row) => ({
+    time: row.time,
+    open: row.open,
+    high: row.high,
+    low: row.low,
+    close: row.close,
+    volume: row.volume,
+  }));
 }
