@@ -10,6 +10,9 @@ import MarketsPage from "./pages/Markets";
 import TradePage from "./pages/Trade";
 import AIPage from "./pages/AI";
 import AdminPage from "./pages/Admin";
+import AdminLayout from "./pages/AdminLayout";
+import AdminTradesPage from "./pages/AdminTrades";
+import AdminUsersPage from "./pages/AdminUsers";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,12 +35,18 @@ const App = () => (
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+
+          <Route path="/admin" element={<AdminLayout />}>
+            <Route index element={<AdminPage />} />
+            <Route path="users" element={<AdminUsersPage />} />
+            <Route path="trades" element={<AdminTradesPage />} />
+          </Route>
+
           <Route element={<AppLayout />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/markets" element={<MarketsPage />} />
             <Route path="/trade" element={<TradePage />} />
             <Route path="/ai" element={<AIPage />} />
-            <Route path="/admin" element={<AdminPage />} />
           </Route>
           <Route path="*" element={<NotFound />} />
         </Routes>
