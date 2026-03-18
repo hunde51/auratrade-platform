@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.order import Order
@@ -14,6 +14,7 @@ from app.schemas.admin.trading import (
     AdminTradeItem,
     AnomaliesResponse,
 )
+from app.schemas.admin.series import AdminTimeSeriesPoint
 
 
 class AdminTradingService:
@@ -113,3 +114,20 @@ class AdminTradingService:
                 anomalies.append({"user_id": user_id, "reason": "Large recent notional loss proxy detected"})
 
         return AnomaliesResponse(items=anomalies)
+
+    async def trade_series(self, *, days: int = 7) -> list[AdminTimeSeriesPoint]:
+        horizon = datetime.now(UTC) - timedelta(days=max(1, min(days, 60)))
+
+        stmt = (
+            select(func.date_trunc("day", Trade.executed_at).label("bucket"), func.count(Trade.id).label("count"))
+            .where(Trade.executed_at >= horizon)
+            .group_by("bucket")
+            .order_by("bucket")
+        )
+        result = await self._session.execute(stmt)
+
+        return [
+            AdminTimeSeriesPoint(label=row.bucket.strftime("%a"), value=int(row.count))
+            for row in result.all()
+            if row.bucket is not None
+        ]

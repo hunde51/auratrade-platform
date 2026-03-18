@@ -1,5 +1,6 @@
 from app.schemas.admin.ai import AdminAIUsageResponse
 from app.schemas.admin.common import AdminUserListItem, PaginatedUsersResponse
+from app.schemas.admin.series import AdminTimeSeriesPoint
 from app.schemas.admin.stats import AdminStatsResponse
 from app.schemas.admin.system import AdminSystemResponse, BroadcastAlertRequest
 from app.schemas.admin.trading import (
@@ -27,6 +28,7 @@ __all__ = [
     "AdminPositionSummary",
     "AdminStatsResponse",
     "AdminSystemResponse",
+    "AdminTimeSeriesPoint",
     "AdminTradeItem",
     "AdminTradeSummary",
     "AdminUserDetailsResponse",

@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from fastapi import HTTPException, status
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
@@ -23,29 +24,36 @@ def normalize_username(username: str) -> str:
 
 async def register_user(session: AsyncSession, payload: RegisterRequest) -> AuthResponse:
     email = normalize_email(payload.email)
-    username = normalize_username(payload.username or payload.email.split("@", maxsplit=1)[0])
+    username = normalize_username(payload.username)
     if len(username) < 3:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username must be at least 3 valid characters")
-
-    existing_user = await get_user_by_email(session, email)
-    if existing_user is not None:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
 
     existing_username = await get_user_by_username(session, username)
     if existing_username is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Username already registered")
 
+    existing_user = await get_user_by_email(session, email)
+    if existing_user is not None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+
     initial_balance = Decimal(str(settings.initial_paper_balance)).quantize(Decimal("0.01"))
-    user = await create_user(session, email=email, username=username, password_hash=hash_password(payload.password))
-    wallet = await create_wallet(session, user_id=user.id, balance=initial_balance)
-    await create_transaction(
-        session,
-        wallet_id=wallet.id,
-        transaction_type=TransactionType.DEPOSIT,
-        amount=initial_balance,
-        description="Initial paper balance",
-    )
-    await session.commit()
+    try:
+        user = await create_user(session, email=email, username=username, password_hash=hash_password(payload.password))
+        wallet = await create_wallet(session, user_id=user.id, balance=initial_balance)
+        await create_transaction(
+            session,
+            wallet_id=wallet.id,
+            transaction_type=TransactionType.DEPOSIT,
+            amount=initial_balance,
+            description="Initial paper balance",
+        )
+        await session.commit()
+    except IntegrityError as exc:
+        await session.rollback()
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Registration conflict, try another email") from exc
+    except Exception:
+        await session.rollback()
+        raise
 
     token = create_access_token(user.id)
     return AuthResponse(access_token=token, token_type="bearer")
