@@ -1,4 +1,5 @@
 from functools import lru_cache
+from pathlib import Path
 from urllib.parse import quote_plus
 
 from pydantic import Field
@@ -6,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    _env_path = Path(__file__).resolve().parents[2] / ".env"
     app_name: str = "AuraTrade API"
     app_env: str = "development"
     app_debug: bool = True
@@ -16,6 +18,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:8080",
         "http://127.0.0.1:8080",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
 
     postgres_user: str = "postgres"
@@ -73,7 +77,7 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60
     initial_paper_balance: float = 100000.0
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(_env_path), env_file_encoding="utf-8", extra="ignore")
 
     @property
     def database_url(self) -> str:
