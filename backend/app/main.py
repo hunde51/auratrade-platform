@@ -7,16 +7,19 @@ from datetime import UTC, datetime
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from redis.exceptions import RedisError
 from sqlalchemy.exc import SQLAlchemyError
+from time import perf_counter
 
 from app.api.router import api_router
 from app.api.websocket_routes import router as websocket_router
 from app.core.config import settings
 from app.core.database import check_database_connection, close_database_engine
 from app.core.logging import configure_logging
+from app.core.monitoring import metrics_registry
 from app.core.redis import check_redis_connection, close_redis_connection, redis_client
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
 from app.services.market_data_service import market_data_service
@@ -30,6 +33,15 @@ logger = logging.getLogger(__name__)
 async def publish_market_updates() -> None:
     """Scheduled job that refreshes provider data and publishes it to Redis channels."""
     await market_data_service.poll_and_publish()
+
+
+async def sync_ws_connection_count() -> None:
+    try:
+        count = await ws_market_manager.connection_count()
+        metrics_registry.set_websocket_connections(count)
+        await redis_client.set("ws:connections", count)
+    except Exception:
+        logger.exception("websocket.connection_count.sync.error")
 
 
 async def redis_market_broadcast_loop() -> None:
@@ -75,6 +87,9 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     except RedisError as exc:
         raise RuntimeError(f"Startup failed: redis unavailable ({exc})") from exc
 
+    metrics_registry.set_dependency_status(redis_available=True, database_available=True, worker_running=False)
+    await redis_client.set("ws:connections", 0)
+
     scheduler = AsyncIOScheduler(timezone="UTC")
     scheduler.add_job(
         publish_market_updates,
@@ -115,9 +130,33 @@ app.include_router(api_router)
 app.include_router(websocket_router)
 
 
+@app.middleware("http")
+async def metrics_middleware(request: Request, call_next) -> Response:
+    start = perf_counter()
+    status_code = 500
+
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        latency = perf_counter() - start
+        metrics_registry.record_http_request(
+            method=request.method,
+            path=request.url.path,
+            status_code=status_code,
+            latency_seconds=latency,
+        )
+
+
 @app.get("/")
 async def root() -> dict[str, str]:
     return {"message": "AuraTrade backend running", "env": settings.app_env}
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics() -> PlainTextResponse:
+    return PlainTextResponse(content=metrics_registry.render_prometheus())
 
 
 @app.websocket("/ws/markets")
@@ -125,6 +164,7 @@ async def markets_websocket_endpoint(websocket: WebSocket) -> None:
     """Clients can subscribe by query param or by sending {"action": "subscribe", "symbol": "BTCUSD"}."""
     await ws_market_manager.connect(websocket)
     await ws_market_manager.subscribe(websocket, "markets")
+    await sync_ws_connection_count()
 
     query_symbols = websocket.query_params.getlist("symbol")
     csv_symbols = websocket.query_params.get("symbols")
@@ -148,7 +188,9 @@ async def markets_websocket_endpoint(websocket: WebSocket) -> None:
             message = await websocket.receive_text()
             await ws_market_manager.handle_subscribe_message(websocket, message)
     except WebSocketDisconnect:
-        await ws_market_manager.disconnect(websocket)
+        pass
     except Exception:
         logger.exception("websocket.markets.error")
+    finally:
         await ws_market_manager.disconnect(websocket)
+        await sync_ws_connection_count()
