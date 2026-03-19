@@ -367,10 +367,15 @@ export async function getNews(): Promise<NewsItem[]> {
   }));
 }
 
-export async function getCandles(symbol: string): Promise<CandleData[]> {
-  const rows = await apiRequest<CandleResponse[]>(`/markets/${encodeURIComponent(symbol)}/candles?points=72`, {
+export async function getCandles(symbol: string, points = 72, timeframe: '1h' | '4h' | '1d' | '1w' = '4h'): Promise<CandleData[]> {
+  const normalizedSymbol = symbol.replace(/\//g, "");
+  const boundedPoints = Math.max(12, Math.min(points, 240));
+  const rows = await apiRequest<CandleResponse[]>(
+    `/markets/${encodeURIComponent(normalizedSymbol)}/candles?points=${boundedPoints}&timeframe=${timeframe}`,
+    {
     auth: false,
-  });
+    }
+  );
   return rows.map((row) => ({
     time: row.time,
     open: row.open,

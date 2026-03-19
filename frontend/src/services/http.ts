@@ -24,9 +24,9 @@ type RequestOptions = RequestInit & {
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const { auth = true, headers, ...rest } = options;
 
-  const nextHeaders: HeadersInit = {
+  const nextHeaders: Record<string, string> = {
     "Content-Type": "application/json",
-    ...(headers ?? {}),
+    ...(headers as Record<string, string> | undefined),
   };
 
   if (auth) {
