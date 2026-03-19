@@ -20,10 +20,12 @@ router = APIRouter(prefix="/users", tags=["admin-users"])
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
+    query: str | None = Query(default=None, max_length=120),
+    role: str | None = Query(default=None, pattern="^(user|admin)$"),
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
 ) -> PaginatedUsersResponse:
-    return await AdminUserService(session).list_users(page=page, page_size=page_size)
+    return await AdminUserService(session).list_users(page=page, page_size=page_size, query=query, role=role)
 
 
 @router.get("/{user_id}", response_model=AdminUserDetailsResponse)

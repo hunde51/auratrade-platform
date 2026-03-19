@@ -3,9 +3,11 @@ import { formatCurrency } from "@/lib/format";
 
 type UsersTableProps = {
   users: AdminUserRow[];
+  selectedUserId?: number | null;
+  onSelectUser?: (userId: number) => void;
 };
 
-export function UsersTable({ users }: UsersTableProps) {
+export function UsersTable({ users, selectedUserId = null, onSelectUser }: UsersTableProps) {
   return (
     <div className="glass-card overflow-hidden">
       <div className="overflow-x-auto">
@@ -21,7 +23,13 @@ export function UsersTable({ users }: UsersTableProps) {
           </thead>
           <tbody>
             {users.map((user) => (
-              <tr key={user.id} className="border-t border-border/70">
+              <tr
+                key={user.id}
+                className={`border-t border-border/70 ${onSelectUser ? "cursor-pointer hover:bg-secondary/20" : ""} ${
+                  selectedUserId === user.id ? "bg-secondary/30" : ""
+                }`}
+                onClick={() => onSelectUser?.(user.id)}
+              >
                 <td className="px-4 py-3 font-medium">{user.id}</td>
                 <td className="px-4 py-3">{user.username}</td>
                 <td className="px-4 py-3">
