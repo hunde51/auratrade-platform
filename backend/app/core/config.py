@@ -18,6 +18,8 @@ class Settings(BaseSettings):
         "http://127.0.0.1:3000",
         "http://localhost:8080",
         "http://127.0.0.1:8080",
+        "http://localhost:8081",
+        "http://127.0.0.1:8081",
         "http://localhost:5173",
         "http://127.0.0.1:5173",
     ]
@@ -40,6 +42,7 @@ class Settings(BaseSettings):
 
     market_cache_prefix: str = "market_prices"
     market_cache_ttl_seconds: int = 5
+    market_ohlc_cache_ttl_seconds: int = 10
     market_poll_interval_seconds: int = 2
     market_default_symbols: list[str] = ["AAPL", "MSFT", "TSLA", "BTCUSD", "ETHUSD"]
     market_api_timeout_seconds: float = 5.0

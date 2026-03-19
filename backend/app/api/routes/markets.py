@@ -25,10 +25,11 @@ async def get_market(symbol: str) -> MarketQuote:
 @router.get("/{symbol}/candles", response_model=list[CandlePoint])
 async def get_market_candles(
     symbol: str,
+    timeframe: str = Query(default="4h", pattern="^(1h|4h|1d|1w)$"),
     points: int = Query(default=72, ge=12, le=240),
 ) -> list[CandlePoint]:
     service = AnalyticsService(session=None)  # type: ignore[arg-type]
-    candles = await service.get_candles(symbol, points=points)
+    candles = await service.get_candles(symbol, points=points, timeframe=timeframe)
     if not candles:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Market symbol not found")
     return candles

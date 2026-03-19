@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db_session
-from app.schemas.analytics import AIInsightItem, NewsItem, VolatilityPrediction
+from app.schemas.analytics import AIInsightItem, NewsItem, SignalItem, VolatilityPrediction
 from app.schemas.coach import CoachResponse
 from app.schemas.sentiment import SentimentResponse
 from app.services.analytics_service import AnalyticsService
@@ -49,3 +49,14 @@ async def get_insights(session: AsyncSession = Depends(get_db_session)) -> list[
 async def get_news(session: AsyncSession = Depends(get_db_session)) -> list[NewsItem]:
     service = AnalyticsService(session)
     return await service.get_news()
+
+
+@router.get("/signals", response_model=list[SignalItem])
+async def get_signals(
+    symbol: list[str] | None = Query(default=None),
+    timeframe: str = Query(default="4h", pattern="^(1h|4h|1d|1w)$"),
+    points: int = Query(default=120, ge=30, le=240),
+    session: AsyncSession = Depends(get_db_session),
+) -> list[SignalItem]:
+    service = AnalyticsService(session)
+    return await service.get_signals(symbols=symbol, timeframe=timeframe, points=points)
