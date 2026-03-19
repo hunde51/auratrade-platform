@@ -40,6 +40,22 @@ export type AdminUserDetail = {
   isActive: boolean;
   walletBalance: number;
   createdAt: string;
+  walletId: number | null;
+  recentTrades: Array<{
+    id: number;
+    symbol: string;
+    side: "buy" | "sell";
+    price: number;
+    quantity: number;
+    executedAt: string;
+  }>;
+  positions: Array<{
+    id: number;
+    symbol: string;
+    quantity: number;
+    averagePrice: number;
+    updatedAt: string;
+  }>;
 };
 
 export type AdminTradeRow = {
@@ -61,6 +77,20 @@ export type AdminOrderRow = {
   quantity: number;
   status: "open" | "filled" | "cancelled";
   createdAt: string;
+};
+
+export type AdminPositionRow = {
+  id: number;
+  userId: number;
+  symbol: string;
+  quantity: number;
+  averagePrice: number;
+  updatedAt: string;
+};
+
+export type AdminAnomalyRow = {
+  userId: number;
+  reason: string;
 };
 
 export type TimeSeriesPoint = {
@@ -111,8 +141,26 @@ type UserDetailResponse = {
   username: string;
   role: string;
   is_active: boolean;
-  wallet_balance: string | number;
+  wallet: {
+    wallet_id: number;
+    balance: string | number;
+  } | null;
   created_at: string;
+  recent_trades: Array<{
+    id: number;
+    symbol: string;
+    side: "buy" | "sell";
+    price: string | number;
+    quantity: string | number;
+    executed_at: string;
+  }>;
+  positions: Array<{
+    id: number;
+    symbol: string;
+    quantity: string | number;
+    average_price: string | number;
+    updated_at: string;
+  }>;
 };
 
 type TradeItemResponse = {
@@ -134,6 +182,22 @@ type OrderItemResponse = {
   quantity: string | number;
   status: "open" | "filled" | "cancelled";
   created_at: string;
+};
+
+type PositionItemResponse = {
+  id: number;
+  user_id: number;
+  symbol: string;
+  quantity: string | number;
+  average_price: string | number;
+  updated_at: string;
+};
+
+type AnomaliesResponse = {
+  items: Array<{
+    user_id: number;
+    reason: string;
+  }>;
 };
 
 const adminClient = axios.create({
@@ -215,25 +279,18 @@ export async function getAdminUsers(params: {
     params: {
       page: params.page,
       page_size: params.pageSize,
+      query: params.query || undefined,
+      role: params.role === "all" ? undefined : params.role,
     },
   });
 
-  let items: AdminUserRow[] = data.items.map((row) => ({
+  const items: AdminUserRow[] = data.items.map((row) => ({
     id: row.id,
     username: row.username,
     role: row.role === "admin" ? "admin" : "user",
     walletBalance: toNumber(row.wallet_balance),
     createdAt: row.created_at,
   }));
-
-  if (params.query) {
-    const q = params.query.toLowerCase();
-    items = items.filter((row) => row.username.toLowerCase().includes(q) || String(row.id).includes(q));
-  }
-
-  if (params.role !== "all") {
-    items = items.filter((row) => row.role === params.role);
-  }
 
   return { items, total: data.total };
 }
@@ -246,9 +303,37 @@ export async function getAdminUserDetail(userId: number): Promise<AdminUserDetai
     username: data.username,
     role: data.role === "admin" ? "admin" : "user",
     isActive: data.is_active,
-    walletBalance: toNumber(data.wallet_balance),
+    walletBalance: toNumber(data.wallet?.balance),
     createdAt: data.created_at,
+    walletId: data.wallet?.wallet_id ?? null,
+    recentTrades: data.recent_trades.map((trade) => ({
+      id: trade.id,
+      symbol: trade.symbol,
+      side: trade.side,
+      price: toNumber(trade.price),
+      quantity: toNumber(trade.quantity),
+      executedAt: trade.executed_at,
+    })),
+    positions: data.positions.map((position) => ({
+      id: position.id,
+      symbol: position.symbol,
+      quantity: toNumber(position.quantity),
+      averagePrice: toNumber(position.average_price),
+      updatedAt: position.updated_at,
+    })),
   };
+}
+
+export async function updateAdminUserRole(userId: number, role: "user" | "admin"): Promise<void> {
+  await adminClient.patch(`/admin/users/${userId}/role`, { role });
+}
+
+export async function updateAdminUserStatus(userId: number, isActive: boolean): Promise<void> {
+  await adminClient.patch(`/admin/users/${userId}/status`, { is_active: isActive });
+}
+
+export async function resetAdminUserWallet(userId: number, balance: number): Promise<void> {
+  await adminClient.post(`/admin/users/${userId}/reset-wallet`, { balance });
 }
 
 export async function getAdminTrades(params: {
@@ -302,6 +387,38 @@ export async function getAdminOrders(params: {
     })),
     total: (params.page - 1) * params.pageSize + data.length + (data.length === params.pageSize ? 1 : 0),
   };
+}
+
+export async function getAdminPositions(params: {
+  page: number;
+  pageSize: number;
+}): Promise<{ items: AdminPositionRow[]; total: number }> {
+  const { data } = await adminClient.get<PositionItemResponse[]>("/admin/positions", {
+    params: {
+      page: params.page,
+      page_size: params.pageSize,
+    },
+  });
+
+  return {
+    items: data.map((row) => ({
+      id: row.id,
+      userId: row.user_id,
+      symbol: row.symbol,
+      quantity: toNumber(row.quantity),
+      averagePrice: toNumber(row.average_price),
+      updatedAt: row.updated_at,
+    })),
+    total: (params.page - 1) * params.pageSize + data.length + (data.length === params.pageSize ? 1 : 0),
+  };
+}
+
+export async function getAdminAnomalies(): Promise<AdminAnomalyRow[]> {
+  const { data } = await adminClient.get<AnomaliesResponse>("/admin/alerts/anomalies");
+  return data.items.map((item) => ({
+    userId: item.user_id,
+    reason: item.reason,
+  }));
 }
 
 export async function getTradesSeries(days = 7): Promise<TimeSeriesPoint[]> {
