@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     market_api_timeout_seconds: float = 5.0
     market_max_retries: int = 3
     market_retry_base_seconds: float = 0.5
+    price_alert_threshold_percent: float = 2.0
+    price_alert_cooldown_seconds: int = 120
 
     alpaca_poll_interval_seconds: int = 2
     polygon_poll_interval_seconds: int = 2

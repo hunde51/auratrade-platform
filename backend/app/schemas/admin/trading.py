@@ -54,3 +54,30 @@ class AnomaliesResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
 
     items: list[AnomalyItem]
+
+
+class PaginatedAdminTradesResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    items: list[AdminTradeItem]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    total: int = Field(ge=0)
+
+
+class PaginatedAdminOrdersResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    items: list[AdminOrderItem]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    total: int = Field(ge=0)
+
+
+class PaginatedAdminPositionsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    items: list[AdminPositionItem]
+    page: int = Field(ge=1)
+    page_size: int = Field(ge=1, le=200)
+    total: int = Field(ge=0)
