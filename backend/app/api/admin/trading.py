@@ -5,40 +5,48 @@ from app.api.deps import get_current_admin
 from app.core.database import get_db_session
 from app.models.user import User
 from app.schemas.admin.series import AdminTimeSeriesPoint
-from app.schemas.admin.trading import AdminOrderItem, AdminPositionItem, AdminTradeItem, AnomaliesResponse
+from app.schemas.admin.trading import (
+    AnomaliesResponse,
+    PaginatedAdminOrdersResponse,
+    PaginatedAdminPositionsResponse,
+    PaginatedAdminTradesResponse,
+)
 from app.services.admin.trading_service import AdminTradingService
 
 router = APIRouter(tags=["admin-trading"])
 
 
-@router.get("/trades", response_model=list[AdminTradeItem])
+@router.get("/trades", response_model=PaginatedAdminTradesResponse)
 async def get_admin_trades(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> list[AdminTradeItem]:
-    return await AdminTradingService(session).list_trades(page=page, page_size=page_size)
+) -> PaginatedAdminTradesResponse:
+    items, total = await AdminTradingService(session).list_trades(page=page, page_size=page_size)
+    return PaginatedAdminTradesResponse(items=items, page=page, page_size=page_size, total=total)
 
 
-@router.get("/positions", response_model=list[AdminPositionItem])
+@router.get("/positions", response_model=PaginatedAdminPositionsResponse)
 async def get_admin_positions(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> list[AdminPositionItem]:
-    return await AdminTradingService(session).list_positions(page=page, page_size=page_size)
+) -> PaginatedAdminPositionsResponse:
+    items, total = await AdminTradingService(session).list_positions(page=page, page_size=page_size)
+    return PaginatedAdminPositionsResponse(items=items, page=page, page_size=page_size, total=total)
 
 
-@router.get("/orders", response_model=list[AdminOrderItem])
+@router.get("/orders", response_model=PaginatedAdminOrdersResponse)
 async def get_admin_orders(
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     _admin: User = Depends(get_current_admin),
     session: AsyncSession = Depends(get_db_session),
-) -> list[AdminOrderItem]:
-    return await AdminTradingService(session).list_orders(page=page, page_size=page_size)
+) -> PaginatedAdminOrdersResponse:
+    items, total = await AdminTradingService(session).list_orders(page=page, page_size=page_size)
+    return PaginatedAdminOrdersResponse(items=items, page=page, page_size=page_size, total=total)
 
 
 @router.get("/alerts/anomalies", response_model=AnomaliesResponse)

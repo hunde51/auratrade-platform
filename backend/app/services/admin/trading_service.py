@@ -21,13 +21,14 @@ class AdminTradingService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_trades(self, *, page: int, page_size: int) -> list[AdminTradeItem]:
+    async def list_trades(self, *, page: int, page_size: int) -> tuple[list[AdminTradeItem], int]:
         offset = (page - 1) * page_size
+        total = await self._session.scalar(select(func.count(Trade.id)))
         result = await self._session.execute(
             select(Trade).order_by(desc(Trade.executed_at), desc(Trade.id)).offset(offset).limit(page_size)
         )
         rows = list(result.scalars().all())
-        return [
+        items = [
             AdminTradeItem(
                 id=trade.id,
                 user_id=trade.user_id,
@@ -39,9 +40,12 @@ class AdminTradingService:
             )
             for trade in rows
         ]
+        return items, int(total or 0)
 
-    async def list_positions(self, *, page: int, page_size: int) -> list[AdminPositionItem]:
+    async def list_positions(self, *, page: int, page_size: int) -> tuple[list[AdminPositionItem], int]:
         offset = (page - 1) * page_size
+        total_stmt = select(func.count(Position.id)).where(Position.quantity > 0)
+        total = await self._session.scalar(total_stmt)
         result = await self._session.execute(
             select(Position)
             .where(Position.quantity > 0)
@@ -50,7 +54,7 @@ class AdminTradingService:
             .limit(page_size)
         )
         rows = list(result.scalars().all())
-        return [
+        items = [
             AdminPositionItem(
                 id=position.id,
                 user_id=position.user_id,
@@ -61,14 +65,16 @@ class AdminTradingService:
             )
             for position in rows
         ]
+        return items, int(total or 0)
 
-    async def list_orders(self, *, page: int, page_size: int) -> list[AdminOrderItem]:
+    async def list_orders(self, *, page: int, page_size: int) -> tuple[list[AdminOrderItem], int]:
         offset = (page - 1) * page_size
+        total = await self._session.scalar(select(func.count(Order.id)))
         result = await self._session.execute(
             select(Order).order_by(desc(Order.created_at), desc(Order.id)).offset(offset).limit(page_size)
         )
         rows = list(result.scalars().all())
-        return [
+        items = [
             AdminOrderItem(
                 id=order.id,
                 user_id=order.user_id,
@@ -82,6 +88,7 @@ class AdminTradingService:
             )
             for order in rows
         ]
+        return items, int(total or 0)
 
     async def list_anomalies(self) -> AnomaliesResponse:
         now = datetime.now(UTC)
