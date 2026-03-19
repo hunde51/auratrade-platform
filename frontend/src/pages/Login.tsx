@@ -22,7 +22,7 @@ export default function LoginPage() {
     try {
       const user = await loginUser(email, password);
       setUser(user);
-      navigate('/dashboard');
+      navigate(user.role === 'admin' ? '/admin' : '/dashboard');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Invalid credentials');
     } finally {
