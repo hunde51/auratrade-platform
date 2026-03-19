@@ -1,10 +1,9 @@
-import math
 from datetime import UTC, datetime, timedelta
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.analytics import AIInsightItem, CandlePoint, NewsItem, VolatilityPrediction
+from app.schemas.analytics import AIInsightItem, CandlePoint, NewsItem, SignalIndicatorSet, SignalItem, SignalLevels, VolatilityPrediction
 from app.services.market_data_service import market_data_service
 from app.services.sentiment_service import SentimentService
 
@@ -15,36 +14,8 @@ class AnalyticsService:
     def __init__(self, session: Optional[AsyncSession]) -> None:
         self._session = session
 
-    async def get_candles(self, symbol: str, points: int = 72) -> list[CandlePoint]:
-        market = await market_data_service.get_market(symbol)
-        if market is None:
-            return []
-
-        base = market.price
-        now = int(datetime.now(UTC).timestamp())
-        total_points = max(12, min(points, 240))
-
-        candles: list[CandlePoint] = []
-        for idx in range(total_points):
-            step = total_points - idx
-            wave = math.sin(step / 6) * base * 0.01
-            open_price = base + wave
-            close = open_price + math.cos(step / 5) * base * 0.002
-            high = max(open_price, close) + base * 0.0015
-            low = max(0.0001, min(open_price, close) - base * 0.0015)
-
-            candles.append(
-                CandlePoint(
-                    time=now - step * 3600,
-                    open=round(open_price, 6),
-                    high=round(high, 6),
-                    low=round(low, 6),
-                    close=round(close, 6),
-                    volume=float(1000 + step * 10),
-                )
-            )
-
-        return candles
+    async def get_candles(self, symbol: str, points: int = 72, timeframe: str = "4h") -> list[CandlePoint]:
+        return await market_data_service.get_historical_candles(symbol, timeframe=timeframe, points=points)
 
     async def get_volatility(self, symbols: list[str] | None = None) -> list[VolatilityPrediction]:
         quotes = await market_data_service.get_markets(symbols)
@@ -128,3 +99,83 @@ class AnalyticsService:
             )
 
         return news
+
+    async def get_signals(
+        self,
+        *,
+        symbols: list[str] | None = None,
+        timeframe: str = "4h",
+        points: int = 120,
+    ) -> list[SignalItem]:
+        target_symbols = symbols or ["BTCUSD", "ETHUSD"]
+        results: list[SignalItem] = []
+
+        for symbol in target_symbols:
+            candles = await self.get_candles(symbol=symbol, points=points, timeframe=timeframe)
+            if len(candles) < 20:
+                continue
+
+            closes = [c.close for c in candles]
+            highs = [c.high for c in candles]
+            lows = [c.low for c in candles]
+
+            sma_fast = self._sma(closes, period=9)
+            sma_slow = self._sma(closes, period=21)
+            rsi_14 = self._rsi(closes, period=14)
+
+            trend = "neutral"
+            confidence = 55.0
+            if sma_fast > sma_slow and rsi_14 >= 52:
+                trend = "bullish"
+                confidence = min(95.0, 60 + (sma_fast - sma_slow) / max(sma_slow, 1e-9) * 1000)
+            elif sma_fast < sma_slow and rsi_14 <= 48:
+                trend = "bearish"
+                confidence = min(95.0, 60 + (sma_slow - sma_fast) / max(sma_slow, 1e-9) * 1000)
+
+            recent_window = candles[-20:]
+            support = min(item.low for item in recent_window)
+            resistance = max(item.high for item in recent_window)
+
+            results.append(
+                SignalItem(
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    trend=trend,
+                    confidence=round(confidence, 2),
+                    indicators=SignalIndicatorSet(
+                        sma_fast=round(sma_fast, 4),
+                        sma_slow=round(sma_slow, 4),
+                        rsi_14=round(rsi_14, 2),
+                    ),
+                    levels=SignalLevels(support=round(support, 4), resistance=round(resistance, 4)),
+                    generated_at=datetime.now(UTC),
+                )
+            )
+
+        return results
+
+    def _sma(self, values: list[float], *, period: int) -> float:
+        if len(values) < period:
+            return values[-1]
+        window = values[-period:]
+        return sum(window) / period
+
+    def _rsi(self, values: list[float], *, period: int = 14) -> float:
+        if len(values) <= period:
+            return 50.0
+
+        gains = 0.0
+        losses = 0.0
+        for idx in range(len(values) - period, len(values)):
+            change = values[idx] - values[idx - 1]
+            if change >= 0:
+                gains += change
+            else:
+                losses += abs(change)
+
+        avg_gain = gains / period
+        avg_loss = losses / period
+        if avg_loss == 0:
+            return 100.0
+        rs = avg_gain / avg_loss
+        return 100 - (100 / (1 + rs))

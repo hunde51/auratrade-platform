@@ -4,11 +4,13 @@ import logging
 import random
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from math import ceil
 
 import httpx
 
 from app.core.config import settings
 from app.core.redis import redis_client
+from app.schemas.analytics import CandlePoint
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
 
 logger = logging.getLogger(__name__)
@@ -30,6 +32,11 @@ class MarketDataService:
             "TSLA": (245.0, 2_400_000.0),
             "BTCUSD": (68000.0, 12_300.0),
             "ETHUSD": (3600.0, 44_000.0),
+        }
+        self._coingecko_coin_id_map: dict[str, str] = {
+            "BTCUSD": "bitcoin",
+            "ETHUSD": "ethereum",
+            "SOLUSD": "solana",
         }
 
     async def poll_and_publish(self, symbols: list[str] | None = None) -> list[MarketQuote]:
@@ -62,8 +69,42 @@ class MarketDataService:
         refreshed = await self.poll_and_publish([symbol_key])
         return refreshed[0] if refreshed else None
 
+    async def get_historical_candles(
+        self,
+        symbol: str,
+        *,
+        timeframe: str = "4h",
+        points: int = 72,
+    ) -> list[CandlePoint]:
+        symbol_key = self._normalize_symbol(symbol)
+        timeframe_key = self._normalize_timeframe(timeframe)
+        bounded_points = max(12, min(points, 240))
+
+        cache_key = f"ohlc:{symbol_key}:{timeframe_key}:{bounded_points}"
+        cached = await redis_client.get(cache_key)
+        if isinstance(cached, str):
+            try:
+                payload = json.loads(cached)
+                if isinstance(payload, list):
+                    return [CandlePoint.model_validate(item) for item in payload]
+            except Exception:
+                logger.exception("market.ohlc.cache.parse.error", extra={"symbol": symbol_key, "timeframe": timeframe_key})
+
+        candles = await self._fetch_historical_from_provider(symbol_key, timeframe_key, bounded_points)
+        if not candles:
+            return []
+
+        try:
+            serializable = [item.model_dump(mode="json") for item in candles]
+            await redis_client.set(cache_key, json.dumps(serializable), ex=settings.market_ohlc_cache_ttl_seconds)
+        except Exception:
+            logger.exception("market.ohlc.cache.write.error", extra={"symbol": symbol_key, "timeframe": timeframe_key})
+
+        return candles
+
     async def _fetch_symbol_quote(self, symbol: str) -> MarketQuote | None:
         provider_chain = [
+            ("coingecko", self._fetch_from_coingecko),
             ("alpaca", self._fetch_from_alpaca),
             ("polygon", self._fetch_from_polygon),
             ("alpha_vantage", self._fetch_from_alpha_vantage),
@@ -134,6 +175,67 @@ class MarketDataService:
         volume = float(size) if isinstance(size, (int, float)) else 0.0
         return self._build_quote(symbol=symbol, price=price, volume=volume, source="alpaca")
 
+    async def _fetch_historical_from_provider(self, symbol: str, timeframe: str, points: int) -> list[CandlePoint]:
+        try:
+            coingecko = await self._fetch_ohlc_from_coingecko(symbol, timeframe=timeframe, points=points)
+            if coingecko:
+                return coingecko
+        except Exception:
+            logger.exception(
+                "market.ohlc.provider.error",
+                extra={"provider": "coingecko", "symbol": symbol, "timeframe": timeframe},
+            )
+
+        # Keep service resilient if provider bars are unavailable.
+        quote = await self.get_market(symbol)
+        if quote is None:
+            return []
+        return self._synthetic_from_last_price(quote.price, points=points, step_seconds=self._timeframe_step_seconds(timeframe))
+
+    async def _fetch_ohlc_from_coingecko(self, symbol: str, *, timeframe: str, points: int) -> list[CandlePoint]:
+        coin_id = self._coingecko_coin_id_map.get(symbol)
+        if coin_id is None:
+            return []
+
+        step_seconds = self._timeframe_step_seconds(timeframe)
+        days = max(1, ceil(points * step_seconds / 86_400))
+        days = min(days, 365)
+
+        url = f"https://api.coingecko.com/api/v3/coins/{coin_id}/ohlc"
+        params = {
+            "vs_currency": "usd",
+            "days": str(days),
+        }
+
+        timeout = httpx.Timeout(settings.market_api_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url, params=params)
+            response.raise_for_status()
+            payload = response.json()
+
+        if not isinstance(payload, list):
+            return []
+
+        candles: list[CandlePoint] = []
+        for row in payload[-points:]:
+            if not isinstance(row, list) or len(row) < 5:
+                continue
+            ts_ms, open_price, high_price, low_price, close_price = row[:5]
+            if not all(isinstance(value, (int, float)) for value in [ts_ms, open_price, high_price, low_price, close_price]):
+                continue
+            candles.append(
+                CandlePoint(
+                    time=int(ts_ms // 1000),
+                    open=float(open_price),
+                    high=float(high_price),
+                    low=float(low_price),
+                    close=float(close_price),
+                    volume=0.0,
+                )
+            )
+
+        return candles
+
     async def _fetch_from_polygon(self, symbol: str) -> MarketQuote | None:
         if not settings.polygon_api_key:
             return None
@@ -194,6 +296,46 @@ class MarketDataService:
             price=price,
             volume=volume,
             source="alpha_vantage",
+            change_percent=change_percent,
+        )
+
+    async def _fetch_from_coingecko(self, symbol: str) -> MarketQuote | None:
+        symbol_map = {
+            "BTCUSD": "bitcoin",
+            "ETHUSD": "ethereum",
+        }
+        coin_id = symbol_map.get(symbol)
+        if coin_id is None:
+            return None
+
+        url = "https://api.coingecko.com/api/v3/simple/price"
+        params = {
+            "ids": coin_id,
+            "vs_currencies": "usd",
+            "include_24hr_vol": "true",
+            "include_24hr_change": "true",
+        }
+
+        data = await self._http_get_json(url, params=params)
+        coin_data = data.get(coin_id) if isinstance(data, dict) else None
+        if not isinstance(coin_data, dict):
+            return None
+
+        price = coin_data.get("usd")
+        if not isinstance(price, (int, float)):
+            return None
+
+        volume_raw = coin_data.get("usd_24h_vol")
+        change_raw = coin_data.get("usd_24h_change")
+
+        volume = float(volume_raw) if isinstance(volume_raw, (int, float)) else 0.0
+        change_percent = float(change_raw) if isinstance(change_raw, (int, float)) else None
+
+        return self._build_quote(
+            symbol=symbol,
+            price=float(price),
+            volume=volume,
+            source="coingecko",
             change_percent=change_percent,
         )
 
@@ -266,13 +408,46 @@ class MarketDataService:
 
     def _fallback_quote(self, symbol: str) -> MarketQuote:
         base_price, base_volume = self._fallback_prices.get(symbol, (100.0, 1000.0))
-        pct = random.uniform(-0.01, 0.01)
-        volume_pct = random.uniform(-0.05, 0.05)
+        # Keep fallback movement conservative so UI does not show unrealistic spikes.
+        if symbol in {"BTCUSD", "ETHUSD", "SOLUSD"}:
+            pct = random.uniform(-0.0005, 0.0005)
+        elif symbol in {"AAPL", "MSFT", "TSLA", "GOOGL", "AMZN"}:
+            pct = random.uniform(-0.0008, 0.0008)
+        else:
+            pct = random.uniform(-0.0012, 0.0012)
+
+        volume_pct = random.uniform(-0.02, 0.02)
 
         price = max(base_price * (1 + pct), 0.0001)
         volume = max(base_volume * (1 + volume_pct), 0.0)
         self._fallback_prices[symbol] = (price, volume)
         return self._build_quote(symbol=symbol, price=price, volume=volume, source="fallback", change_percent=pct * 100)
+
+    def _synthetic_from_last_price(self, base: float, *, points: int, step_seconds: int) -> list[CandlePoint]:
+        now = int(datetime.now(UTC).timestamp())
+        candles: list[CandlePoint] = []
+        price = base
+
+        for idx in range(points):
+            drift = random.uniform(-0.0025, 0.0025)
+            open_price = price
+            close_price = max(0.0001, open_price * (1 + drift))
+            wick_scale = open_price * random.uniform(0.0005, 0.003)
+            high = max(open_price, close_price) + wick_scale
+            low = max(0.0001, min(open_price, close_price) - wick_scale)
+            candles.append(
+                CandlePoint(
+                    time=now - (points - idx) * step_seconds,
+                    open=round(open_price, 6),
+                    high=round(high, 6),
+                    low=round(low, 6),
+                    close=round(close_price, 6),
+                    volume=float(max(0.0, random.uniform(300.0, 5000.0))),
+                )
+            )
+            price = close_price
+
+        return candles
 
     def _normalize_symbols(self, symbols: list[str]) -> list[str]:
         normalized = [self._normalize_symbol(symbol) for symbol in symbols if symbol]
@@ -284,6 +459,22 @@ class MarketDataService:
 
     def _normalize_symbol(self, symbol: str) -> str:
         return symbol.strip().upper().replace("/", "")
+
+    def _normalize_timeframe(self, timeframe: str) -> str:
+        value = timeframe.strip().lower()
+        if value not in {"1h", "4h", "1d", "1w"}:
+            return "4h"
+        return value
+
+    def _timeframe_step_seconds(self, timeframe: str) -> int:
+        normalized = self._normalize_timeframe(timeframe)
+        if normalized == "1h":
+            return 3600
+        if normalized == "4h":
+            return 4 * 3600
+        if normalized == "1d":
+            return 24 * 3600
+        return 7 * 24 * 3600
 
     def _cache_key(self, symbol: str) -> str:
         return f"{settings.market_cache_prefix}:{symbol}"

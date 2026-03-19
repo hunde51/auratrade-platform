@@ -50,3 +50,30 @@ class TimeSeriesPoint(BaseModel):
 
     label: str
     value: int = Field(ge=0)
+
+
+class SignalLevels(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    support: float = Field(ge=0)
+    resistance: float = Field(ge=0)
+
+
+class SignalIndicatorSet(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    sma_fast: float
+    sma_slow: float
+    rsi_14: float = Field(ge=0, le=100)
+
+
+class SignalItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    symbol: str
+    timeframe: str
+    trend: str
+    confidence: float = Field(ge=0, le=100)
+    indicators: SignalIndicatorSet
+    levels: SignalLevels
+    generated_at: datetime
