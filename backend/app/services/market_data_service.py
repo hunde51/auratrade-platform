@@ -10,8 +10,10 @@ import httpx
 
 from app.core.config import settings
 from app.core.redis import redis_client
+from app.events.event_publisher import event_publisher
 from app.schemas.analytics import CandlePoint
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
+from app.websocket.websocket_manager import ws_user_manager
 
 logger = logging.getLogger(__name__)
 
@@ -41,14 +43,57 @@ class MarketDataService:
 
     async def poll_and_publish(self, symbols: list[str] | None = None) -> list[MarketQuote]:
         target_symbols = self._normalize_symbols(symbols or settings.market_default_symbols)
+        previous_quotes = await self._load_cached_quotes(target_symbols)
         quote_tasks = [self._fetch_symbol_quote(symbol) for symbol in target_symbols]
         quotes = [quote for quote in await asyncio.gather(*quote_tasks) if quote is not None]
         if not quotes:
             return []
 
-        await asyncio.gather(self._cache_quotes(quotes), self._publish_quotes(quotes))
+        await asyncio.gather(
+            self._cache_quotes(quotes),
+            self._publish_quotes(quotes),
+            self._publish_price_alerts(quotes, previous_quotes),
+        )
         logger.info("market.poll.completed", extra={"symbols": [q.symbol for q in quotes], "count": len(quotes)})
         return quotes
+
+    async def _publish_price_alerts(self, quotes: list[MarketQuote], previous_quotes: dict[str, MarketQuote]) -> None:
+        threshold = max(0.1, float(settings.price_alert_threshold_percent))
+        connected_users = await ws_user_manager.connected_user_ids()
+        if not connected_users:
+            return
+
+        for quote in quotes:
+            change_percent = quote.change_percent
+            if change_percent is None:
+                prev = previous_quotes.get(quote.symbol)
+                if prev is None or prev.price <= 0:
+                    continue
+                change_percent = ((quote.price - prev.price) / prev.price) * 100
+
+            if abs(change_percent) < threshold:
+                continue
+
+            cooldown_key = f"price_alert:cooldown:{quote.symbol}"
+            should_emit = await redis_client.set(
+                name=cooldown_key,
+                value=str(datetime.now(UTC).timestamp()),
+                ex=settings.price_alert_cooldown_seconds,
+                nx=True,
+            )
+            if not should_emit:
+                continue
+
+            direction = "up" if change_percent >= 0 else "down"
+            payload = {
+                "symbol": quote.symbol,
+                "price": str(quote.price),
+                "change_percent": round(float(change_percent), 4),
+                "direction": direction,
+                "source": quote.source,
+            }
+            for user_id in connected_users:
+                await event_publisher.publish_price_alert(user_id, payload)
 
     async def get_markets(self, symbols: list[str] | None = None) -> list[MarketQuote]:
         target_symbols = self._normalize_symbols(symbols or settings.market_default_symbols)

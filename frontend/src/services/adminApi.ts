@@ -193,6 +193,27 @@ type PositionItemResponse = {
   updated_at: string;
 };
 
+type PaginatedTradeResponse = {
+  items: TradeItemResponse[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+type PaginatedOrderResponse = {
+  items: OrderItemResponse[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
+type PaginatedPositionResponse = {
+  items: PositionItemResponse[];
+  page: number;
+  page_size: number;
+  total: number;
+};
+
 type AnomaliesResponse = {
   items: Array<{
     user_id: number;
@@ -340,14 +361,14 @@ export async function getAdminTrades(params: {
   page: number;
   pageSize: number;
 }): Promise<{ items: AdminTradeRow[]; total: number }> {
-  const { data } = await adminClient.get<TradeItemResponse[]>("/admin/trades", {
+  const { data } = await adminClient.get<PaginatedTradeResponse>("/admin/trades", {
     params: {
       page: params.page,
       page_size: params.pageSize,
     },
   });
 
-  const items = data.map((row) => ({
+  const items = data.items.map((row) => ({
     id: row.id,
     user: `User #${row.user_id}`,
     symbol: row.symbol,
@@ -359,7 +380,7 @@ export async function getAdminTrades(params: {
 
   return {
     items,
-    total: (params.page - 1) * params.pageSize + data.length + (data.length === params.pageSize ? 1 : 0),
+    total: data.total,
   };
 }
 
@@ -367,7 +388,7 @@ export async function getAdminOrders(params: {
   page: number;
   pageSize: number;
 }): Promise<{ items: AdminOrderRow[]; total: number }> {
-  const { data } = await adminClient.get<OrderItemResponse[]>("/admin/orders", {
+  const { data } = await adminClient.get<PaginatedOrderResponse>("/admin/orders", {
     params: {
       page: params.page,
       page_size: params.pageSize,
@@ -375,7 +396,7 @@ export async function getAdminOrders(params: {
   });
 
   return {
-    items: data.map((row) => ({
+    items: data.items.map((row) => ({
       id: row.id,
       userId: row.user_id,
       symbol: row.symbol,
@@ -385,7 +406,7 @@ export async function getAdminOrders(params: {
       status: row.status,
       createdAt: row.created_at,
     })),
-    total: (params.page - 1) * params.pageSize + data.length + (data.length === params.pageSize ? 1 : 0),
+    total: data.total,
   };
 }
 
@@ -393,7 +414,7 @@ export async function getAdminPositions(params: {
   page: number;
   pageSize: number;
 }): Promise<{ items: AdminPositionRow[]; total: number }> {
-  const { data } = await adminClient.get<PositionItemResponse[]>("/admin/positions", {
+  const { data } = await adminClient.get<PaginatedPositionResponse>("/admin/positions", {
     params: {
       page: params.page,
       page_size: params.pageSize,
@@ -401,7 +422,7 @@ export async function getAdminPositions(params: {
   });
 
   return {
-    items: data.map((row) => ({
+    items: data.items.map((row) => ({
       id: row.id,
       userId: row.user_id,
       symbol: row.symbol,
@@ -409,7 +430,7 @@ export async function getAdminPositions(params: {
       averagePrice: toNumber(row.average_price),
       updatedAt: row.updated_at,
     })),
-    total: (params.page - 1) * params.pageSize + data.length + (data.length === params.pageSize ? 1 : 0),
+    total: data.total,
   };
 }
 

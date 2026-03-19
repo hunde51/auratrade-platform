@@ -48,5 +48,9 @@ class WebSocketManager:
             await self.disconnect(user_id)
             return False
 
+    async def connected_user_ids(self) -> list[int]:
+        async with self._lock:
+            return list(self._connections.keys())
+
 
 ws_user_manager = WebSocketManager()
