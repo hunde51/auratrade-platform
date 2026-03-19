@@ -1,7 +1,7 @@
 from decimal import Decimal
 
 from fastapi import HTTPException, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.position import Position
@@ -23,17 +23,47 @@ class AdminUserService:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def list_users(self, *, page: int, page_size: int) -> PaginatedUsersResponse:
+    async def list_users(
+        self,
+        *,
+        page: int,
+        page_size: int,
+        query: str | None = None,
+        role: str | None = None,
+    ) -> PaginatedUsersResponse:
         offset = (page - 1) * page_size
+        filters = []
 
-        total = await self._session.scalar(select(func.count(User.id)))
-        result = await self._session.execute(
+        normalized_query = (query or "").strip()
+        if normalized_query:
+            if normalized_query.isdigit():
+                filters.append(User.id == int(normalized_query))
+            else:
+                like_expr = f"%{normalized_query.lower()}%"
+                filters.append(or_(func.lower(User.username).like(like_expr), func.lower(User.email).like(like_expr)))
+
+        normalized_role = (role or "").strip().lower()
+        if normalized_role in {"user", "admin"}:
+            filters.append(User.role == UserRole(normalized_role))
+
+        where_clause = and_(*filters) if filters else None
+
+        total_stmt = select(func.count(User.id))
+        if where_clause is not None:
+            total_stmt = total_stmt.where(where_clause)
+
+        list_stmt = (
             select(User, Wallet)
             .outerjoin(Wallet, Wallet.user_id == User.id)
             .order_by(desc(User.created_at), desc(User.id))
             .offset(offset)
             .limit(page_size)
         )
+        if where_clause is not None:
+            list_stmt = list_stmt.where(where_clause)
+
+        total = await self._session.scalar(total_stmt)
+        result = await self._session.execute(list_stmt)
 
         items = [
             AdminUserListItem(

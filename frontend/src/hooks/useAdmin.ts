@@ -2,7 +2,9 @@ import { useQuery } from "@tanstack/react-query";
 
 import {
   getAIUsage,
+  getAdminAnomalies,
   getAdminOrders,
+  getAdminPositions,
   getAdminStats,
   getAdminUserDetail,
   getSystemHealth,
@@ -82,4 +84,20 @@ export const useAdminOrders = (page: number, pageSize: number) =>
     queryFn: () => getAdminOrders({ page, pageSize }),
     staleTime: 30_000,
     placeholderData: (previousData) => previousData,
+  });
+
+export const useAdminPositions = (page: number, pageSize: number) =>
+  useQuery({
+    queryKey: ["admin", "positions", page, pageSize],
+    queryFn: () => getAdminPositions({ page, pageSize }),
+    staleTime: 30_000,
+    placeholderData: (previousData) => previousData,
+  });
+
+export const useAdminAnomalies = () =>
+  useQuery({
+    queryKey: ["admin", "anomalies"],
+    queryFn: getAdminAnomalies,
+    staleTime: 30_000,
+    refetchInterval: 30_000,
   });
