@@ -105,6 +105,8 @@ class MarketDataService:
     async def _fetch_symbol_quote(self, symbol: str) -> MarketQuote | None:
         provider_chain = [
             ("coingecko", self._fetch_from_coingecko),
+            ("coinbase", self._fetch_from_coinbase),
+            ("alpaca_crypto", self._fetch_from_alpaca_crypto),
             ("alpaca", self._fetch_from_alpaca),
             ("polygon", self._fetch_from_polygon),
             ("alpha_vantage", self._fetch_from_alpha_vantage),
@@ -174,6 +176,44 @@ class MarketDataService:
 
         volume = float(size) if isinstance(size, (int, float)) else 0.0
         return self._build_quote(symbol=symbol, price=price, volume=volume, source="alpaca")
+
+    async def _fetch_from_alpaca_crypto(self, symbol: str) -> MarketQuote | None:
+        if not settings.alpaca_api_key or not settings.alpaca_api_secret:
+            return None
+
+        symbol_map = {
+            "BTCUSD": "BTC/USD",
+            "ETHUSD": "ETH/USD",
+            "SOLUSD": "SOL/USD",
+        }
+        alpaca_symbol = symbol_map.get(symbol)
+        if alpaca_symbol is None:
+            return None
+
+        url = f"{settings.alpaca_base_url}/v1beta3/crypto/us/latest/quotes"
+        headers = {
+            "APCA-API-KEY-ID": settings.alpaca_api_key,
+            "APCA-API-SECRET-KEY": settings.alpaca_api_secret,
+        }
+        params = {"symbols": alpaca_symbol}
+
+        data = await self._http_get_json(url, headers=headers, params=params)
+        quotes = data.get("quotes") if isinstance(data, dict) else None
+        quote = quotes.get(alpaca_symbol) if isinstance(quotes, dict) else None
+        if not isinstance(quote, dict):
+            return None
+
+        bid = quote.get("bp")
+        ask = quote.get("ap")
+        if not isinstance(bid, (int, float)) and not isinstance(ask, (int, float)):
+            return None
+
+        if isinstance(bid, (int, float)) and isinstance(ask, (int, float)):
+            price = (float(bid) + float(ask)) / 2
+        else:
+            price = float(bid if isinstance(bid, (int, float)) else ask)
+
+        return self._build_quote(symbol=symbol, price=price, volume=0.0, source="alpaca_crypto")
 
     async def _fetch_historical_from_provider(self, symbol: str, timeframe: str, points: int) -> list[CandlePoint]:
         try:
@@ -338,6 +378,38 @@ class MarketDataService:
             source="coingecko",
             change_percent=change_percent,
         )
+
+    async def _fetch_from_coinbase(self, symbol: str) -> MarketQuote | None:
+        product_map = {
+            "BTCUSD": "BTC-USD",
+            "ETHUSD": "ETH-USD",
+            "SOLUSD": "SOL-USD",
+        }
+        product = product_map.get(symbol)
+        if product is None:
+            return None
+
+        url = f"https://api.exchange.coinbase.com/products/{product}/ticker"
+        timeout = httpx.Timeout(settings.market_api_timeout_seconds)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            payload = response.json()
+
+        if not isinstance(payload, dict):
+            return None
+
+        try:
+            price = float(payload.get("price"))
+        except (TypeError, ValueError):
+            return None
+
+        try:
+            volume = float(payload.get("volume"))
+        except (TypeError, ValueError):
+            volume = 0.0
+
+        return self._build_quote(symbol=symbol, price=price, volume=volume, source="coinbase")
 
     async def _http_get_json(
         self,
