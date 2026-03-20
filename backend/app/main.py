@@ -1,6 +1,7 @@
 import asyncio
 import contextlib
 import logging
+import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -20,6 +21,7 @@ from app.core.config import settings
 from app.core.database import check_database_connection, close_database_engine
 from app.core.logging import configure_logging
 from app.core.monitoring import metrics_registry
+from app.core.request_context import set_request_id
 from app.core.redis import check_redis_connection, close_redis_connection, redis_client
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
 from app.services.market_data_service import market_data_service
@@ -28,6 +30,23 @@ from app.services.websocket_manager import ws_market_manager
 
 configure_logging()
 logger = logging.getLogger(__name__)
+
+
+def _validate_runtime_security_config() -> None:
+    env = settings.app_env.strip().lower()
+    secret = settings.jwt_secret_key.strip()
+    weak_default = secret == "change-me-in-production"
+    too_short = len(secret) < 32
+
+    if env in {"production", "prod"} and settings.enforce_strong_jwt_secret_in_production:
+        if weak_default or too_short:
+            raise RuntimeError(
+                "Startup failed: insecure JWT secret for production. "
+                "Set a strong jwt_secret_key (min 32 chars, non-default)."
+            )
+
+    if weak_default or too_short:
+        logger.warning("security.jwt_secret.weak", extra={"env": env})
 
 
 async def publish_market_updates() -> None:
@@ -79,6 +98,8 @@ async def redis_market_broadcast_loop() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    _validate_runtime_security_config()
+
     try:
         await check_database_connection()
         await check_redis_connection()
@@ -131,6 +152,17 @@ app.include_router(websocket_router)
 
 
 @app.middleware("http")
+async def request_id_middleware(request: Request, call_next) -> Response:
+    incoming = request.headers.get("x-request-id", "").strip()
+    request_id = incoming or str(uuid.uuid4())
+    set_request_id(request_id)
+
+    response = await call_next(request)
+    response.headers.setdefault("X-Request-ID", request_id)
+    return response
+
+
+@app.middleware("http")
 async def metrics_middleware(request: Request, call_next) -> Response:
     start = perf_counter()
     status_code = 500
@@ -147,6 +179,31 @@ async def metrics_middleware(request: Request, call_next) -> Response:
             status_code=status_code,
             latency_seconds=latency,
         )
+
+
+@app.middleware("http")
+async def security_headers_middleware(request: Request, call_next) -> Response:
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "same-origin")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+
+    # FastAPI docs use external JS/CSS assets; keep a stricter CSP for API routes.
+    if request.url.path in {"/docs", "/redoc", "/openapi.json"}:
+        docs_csp = (
+            "default-src 'self'; "
+            "script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com; "
+            "img-src 'self' data: https:; "
+            "font-src 'self' data: https://cdn.jsdelivr.net https://unpkg.com; "
+            "connect-src 'self'; "
+            "frame-ancestors 'none';"
+        )
+        response.headers["Content-Security-Policy"] = docs_csp
+    else:
+        response.headers.setdefault("Content-Security-Policy", "default-src 'self'; frame-ancestors 'none';")
+    return response
 
 
 @app.get("/")

@@ -2,6 +2,8 @@ import json
 import logging
 from datetime import UTC, datetime
 
+from app.core.request_context import get_request_id
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -10,6 +12,7 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
+            "request_id": get_request_id(),
         }
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
