@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     postgres_host: str = "localhost"
     postgres_port: int = 5432
     postgres_db: str = "aura_ledger"
+    db_echo_sql: bool = False
 
     redis_host: str = "localhost"
     redis_port: int = 6379
@@ -48,6 +49,7 @@ class Settings(BaseSettings):
     market_api_timeout_seconds: float = 5.0
     market_max_retries: int = 3
     market_retry_base_seconds: float = 0.5
+    market_provider_rate_limit_cooldown_seconds: int = 20
     price_alert_threshold_percent: float = 2.0
     price_alert_cooldown_seconds: int = 120
 
@@ -81,6 +83,11 @@ class Settings(BaseSettings):
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 60
     initial_paper_balance: float = 100000.0
+    enforce_strong_jwt_secret_in_production: bool = True
+
+    auth_rate_limit_login_attempts: int = 10
+    auth_rate_limit_register_attempts: int = 8
+    auth_rate_limit_window_seconds: int = 60
 
     model_config = SettingsConfigDict(env_file=str(_env_path), env_file_encoding="utf-8", extra="ignore")
 

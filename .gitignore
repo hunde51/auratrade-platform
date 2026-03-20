@@ -36,7 +36,7 @@ frontend/.vite/
 frontend/coverage/
 frontend/playwright-report/
 frontend/test-results/
-
+hunde.text
 # Logs
 logs/
 *.log
