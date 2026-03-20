@@ -9,6 +9,7 @@ from math import ceil
 import httpx
 
 from app.core.config import settings
+from app.core.monitoring import metrics_registry
 from app.core.redis import redis_client
 from app.events.event_publisher import event_publisher
 from app.schemas.analytics import CandlePoint
@@ -158,12 +159,15 @@ class MarketDataService:
         ]
 
         for provider_name, provider_fn in provider_chain:
+            if await self._provider_in_cooldown(provider_name):
+                continue
             result = await self._retry_provider_call(provider_name, symbol, provider_fn)
             if result is not None:
                 return result.quote
 
         # Fallback keeps websocket and API live when providers are unavailable.
         fallback = self._fallback_quote(symbol)
+        metrics_registry.record_provider_call(service="market", provider="fallback", outcome="fallback")
         logger.warning("market.provider.fallback", extra={"symbol": symbol})
         return fallback
 
@@ -178,12 +182,44 @@ class MarketDataService:
                 quote = await provider_fn(symbol)
                 if quote is None:
                     return None
+                metrics_registry.record_provider_call(service="market", provider=provider_name, outcome="success")
                 logger.info(
                     "market.provider.success",
                     extra={"provider": provider_name, "symbol": symbol, "attempt": attempt},
                 )
                 return ProviderResult(quote=quote, provider=provider_name)
+            except httpx.TimeoutException:
+                metrics_registry.record_provider_call(service="market", provider=provider_name, outcome="timeout")
+                if attempt == settings.market_max_retries:
+                    logger.exception(
+                        "market.provider.timeout",
+                        extra={"provider": provider_name, "symbol": symbol, "attempt": attempt},
+                    )
+                    return None
+                backoff = settings.market_retry_base_seconds * (2 ** (attempt - 1))
+                await asyncio.sleep(backoff)
+            except httpx.HTTPStatusError as exc:
+                status_code = exc.response.status_code if exc.response is not None else None
+                if status_code == 429:
+                    metrics_registry.record_provider_call(service="market", provider=provider_name, outcome="rate_limited")
+                    await self._mark_provider_cooldown(provider_name)
+                    logger.warning(
+                        "market.provider.rate_limited",
+                        extra={"provider": provider_name, "symbol": symbol, "attempt": attempt},
+                    )
+                    return None
+
+                metrics_registry.record_provider_call(service="market", provider=provider_name, outcome="error")
+                if attempt == settings.market_max_retries:
+                    logger.exception(
+                        "market.provider.error",
+                        extra={"provider": provider_name, "symbol": symbol, "attempt": attempt},
+                    )
+                    return None
+                backoff = settings.market_retry_base_seconds * (2 ** (attempt - 1))
+                await asyncio.sleep(backoff)
             except Exception:
+                metrics_registry.record_provider_call(service="market", provider=provider_name, outcome="error")
                 if attempt == settings.market_max_retries:
                     logger.exception(
                         "market.provider.error",
@@ -193,6 +229,23 @@ class MarketDataService:
                 backoff = settings.market_retry_base_seconds * (2 ** (attempt - 1))
                 await asyncio.sleep(backoff)
         return None
+
+    async def _provider_in_cooldown(self, provider_name: str) -> bool:
+        key = self._provider_cooldown_key(provider_name)
+        try:
+            return await redis_client.exists(key) > 0
+        except Exception:
+            return False
+
+    async def _mark_provider_cooldown(self, provider_name: str) -> None:
+        key = self._provider_cooldown_key(provider_name)
+        try:
+            await redis_client.set(name=key, value="1", ex=settings.market_provider_rate_limit_cooldown_seconds)
+        except Exception:
+            return
+
+    def _provider_cooldown_key(self, provider_name: str) -> str:
+        return f"market:provider_cooldown:{provider_name.strip().lower()}"
 
     async def _fetch_from_alpaca(self, symbol: str) -> MarketQuote | None:
         if not settings.alpaca_api_key or not settings.alpaca_api_secret:

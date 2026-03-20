@@ -7,6 +7,7 @@ import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.monitoring import metrics_registry
 from app.core.redis import redis_client
 from app.models.sentiment import SentimentLabel, SentimentSignal
 from app.schemas.sentiment import SentimentResponse, _AIProviderPayload
@@ -72,11 +73,13 @@ class SentimentService:
 
     async def _analyze_symbol(self, symbol: str, news: str) -> SentimentResponse:
         if not settings.ai_api_key:
+            metrics_registry.record_provider_call(service="ai", provider=self._provider, outcome="config_missing")
             return self._fallback(symbol)
 
         try:
             payload = await self._request_provider(news)
             parsed = _AIProviderPayload.model_validate(payload)
+            metrics_registry.record_provider_call(service="ai", provider=self._provider, outcome="success")
             return SentimentResponse(
                 symbol=symbol,
                 sentiment=parsed.sentiment,
@@ -84,7 +87,12 @@ class SentimentService:
                 source=self._provider,
                 created_at=datetime.now(UTC),
             )
+        except httpx.TimeoutException:
+            metrics_registry.record_provider_call(service="ai", provider=self._provider, outcome="timeout")
+            logger.exception("ai.sentiment.provider.timeout", extra={"provider": self._provider, "symbol": symbol})
+            return self._fallback(symbol)
         except Exception:
+            metrics_registry.record_provider_call(service="ai", provider=self._provider, outcome="error")
             logger.exception("ai.sentiment.provider.error", extra={"provider": self._provider, "symbol": symbol})
             return self._fallback(symbol)
 
@@ -185,6 +193,7 @@ class SentimentService:
         await redis_client.publish(settings.redis_channel_sentiment_updates, sentiment.model_dump_json())
 
     def _fallback(self, symbol: str) -> SentimentResponse:
+        metrics_registry.record_provider_call(service="ai", provider="fallback", outcome="fallback")
         sentiment = random.choice([SentimentLabel.BULLISH, SentimentLabel.BEARISH, SentimentLabel.NEUTRAL])
         return SentimentResponse(
             symbol=symbol,
