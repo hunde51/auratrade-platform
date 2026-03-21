@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
 import {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, LogOut, X,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, LogOut, X, Settings,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const iconMap: Record<string, React.ElementType> = {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, Settings,
 };
 
 export function Navbar() {

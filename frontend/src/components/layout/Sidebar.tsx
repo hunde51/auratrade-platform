@@ -1,14 +1,14 @@
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, LogOut,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, LogOut, Settings,
 } from 'lucide-react';
 import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
 import { useUserStore } from '@/store/useUserStore';
 import { useNavigate } from 'react-router-dom';
 
 const iconMap: Record<string, React.ElementType> = {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Settings,
 };
 
 export function Sidebar() {

@@ -8,6 +8,7 @@ from app.schemas.notification import NotificationEvent, NotificationEventType
 from app.schemas.order import CreateOrderRequest, OrderResponse
 from app.schemas.position import PositionResponse
 from app.schemas.sentiment import SentimentResponse
+from app.schemas.settings import ChangePasswordRequest, UpdateUserSettingsRequest, UserSettingsResponse
 from app.schemas.trade import TradeResponse
 from app.schemas.wallet import TransactionResponse, WalletMutationRequest, WalletResponse
 
@@ -34,4 +35,7 @@ __all__ = [
     "TradeResponse",
     "PositionResponse",
     "SentimentResponse",
+    "UserSettingsResponse",
+    "UpdateUserSettingsRequest",
+    "ChangePasswordRequest",
 ]

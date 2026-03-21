@@ -9,6 +9,7 @@ from app.models.transaction import TransactionType
 from app.models.user import User
 from app.repositories.transaction import create_transaction
 from app.repositories.user import create_user, get_user_by_email, get_user_by_username
+from app.repositories.user_settings import create_user_settings
 from app.repositories.wallet import create_wallet
 from app.schemas.auth import AuthResponse, LoginRequest, RegisterRequest, UserResponse
 from app.services.auth import create_access_token, hash_password, verify_password
@@ -39,6 +40,7 @@ async def register_user(session: AsyncSession, payload: RegisterRequest) -> Auth
     initial_balance = Decimal(str(settings.initial_paper_balance)).quantize(Decimal("0.01"))
     try:
         user = await create_user(session, email=email, username=username, password_hash=hash_password(payload.password))
+        await create_user_settings(session, user_id=user.id)
         wallet = await create_wallet(session, user_id=user.id, balance=initial_balance)
         await create_transaction(
             session,
