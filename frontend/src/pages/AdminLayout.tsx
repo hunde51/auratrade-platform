@@ -1,4 +1,4 @@
-import { Brain, LogOut, Shield, Users } from "lucide-react";
+import { Brain, LogOut, Settings, Shield, Users } from "lucide-react";
 import { Navigate, NavLink as RouterNavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { APP_NAME } from "@/lib/constants";
@@ -10,6 +10,7 @@ const adminNavItems = [
   { label: "Overview", path: "/admin", icon: Shield, exact: true },
   { label: "Users", path: "/admin/users", icon: Users },
   { label: "Trades", path: "/admin/trades", icon: Brain },
+  { label: "Settings", path: "/admin/settings", icon: Settings },
 ] as const satisfies ReadonlyArray<{
   label: string;
   path: string;

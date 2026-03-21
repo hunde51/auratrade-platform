@@ -11,6 +11,7 @@ const TIMEFRAMES = ["1h", "4h", "1d", "1w"] as const;
 export default function SettingsPage() {
   const queryClient = useQueryClient();
   const settingsQuery = useQuery({ queryKey: ["user-settings"], queryFn: getUserSettings });
+  const settingsLoadError = settingsQuery.error instanceof Error ? settingsQuery.error.message : "Failed to load settings.";
 
   const [username, setUsername] = useState("");
   const [defaultOrderType, setDefaultOrderType] = useState<"market" | "limit">("market");
@@ -117,7 +118,7 @@ export default function SettingsPage() {
   if (settingsQuery.isError || !settingsQuery.data) {
     return (
       <div className="glass-card flex items-center justify-between p-6 text-sm">
-        <span className="text-red-300">Failed to load settings.</span>
+        <span className="text-red-300">{settingsLoadError}</span>
         <button type="button" onClick={() => settingsQuery.refetch()} className="rounded-md bg-secondary px-3 py-2 text-xs">
           Retry
         </button>
@@ -243,7 +244,7 @@ export default function SettingsPage() {
         </div>
       </form>
 
-      <form onSubmit={onChangePassword} className="glass-card space-y-4 p-5">
+      <form onSubmit={onChangePassword} className="glass-card space-y-4 border border-red-500/50 p-5">
         <h3 className="text-sm font-semibold">Change Password</h3>
 
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
@@ -277,7 +278,7 @@ export default function SettingsPage() {
           <button
             type="submit"
             disabled={passwordMutation.isPending}
-            className="rounded-md bg-secondary px-4 py-2 text-sm font-semibold disabled:opacity-50"
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500 disabled:opacity-50"
           >
             {passwordMutation.isPending ? "Updating..." : "Update password"}
           </button>

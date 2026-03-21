@@ -13,6 +13,7 @@ import DashboardPage from "./pages/Dashboard";
 import MarketsPage from "./pages/Markets";
 import TradePage from "./pages/Trade";
 import AIPage from "./pages/AI";
+import SettingsPage from "./pages/Settings";
 import AdminPage from "./pages/Admin";
 import AdminLayout from "./pages/AdminLayout";
 import AdminTradesPage from "./pages/AdminTrades";
@@ -130,6 +131,7 @@ function AppRoutes() {
         <Route index element={<AdminPage />} />
         <Route path="users" element={<AdminUsersPage />} />
         <Route path="trades" element={<AdminTradesPage />} />
+        <Route path="settings" element={<SettingsPage />} />
       </Route>
 
       <Route
@@ -143,6 +145,7 @@ function AppRoutes() {
         <Route path="/markets" element={<MarketsPage />} />
         <Route path="/trade" element={<TradePage />} />
         <Route path="/ai" element={<AIPage />} />
+        <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
     </Routes>
