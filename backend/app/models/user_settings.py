@@ -23,6 +23,7 @@ class UserSettings(Base):
 
     preferred_symbols: Mapped[list[str]] = mapped_column(JSON, default=list)
     preferred_timeframe: Mapped[str] = mapped_column(String(5), default="4h")
+    last_password_changed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

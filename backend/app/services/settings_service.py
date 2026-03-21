@@ -1,4 +1,5 @@
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
 
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -71,6 +72,21 @@ class UserSettingsService:
         return self._to_response(settings)
 
     async def change_password(self, payload: ChangePasswordRequest) -> None:
+        settings, _created = await self._get_or_create_settings(for_update=True)
+
+        if settings.last_password_changed_at is not None:
+            last_changed = settings.last_password_changed_at
+            if last_changed.tzinfo is None:
+                last_changed = last_changed.replace(tzinfo=timezone.utc)
+
+            now_utc = datetime.now(timezone.utc)
+            next_allowed_at = last_changed + timedelta(days=1)
+            if now_utc < next_allowed_at:
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail=f"Password can only be changed once every 24 hours. Try again after {next_allowed_at.isoformat()}",
+                )
+
         if not verify_password(payload.current_password, self._user.password_hash):
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Current password is incorrect")
 
@@ -78,6 +94,7 @@ class UserSettingsService:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="New password must be different")
 
         self._user.password_hash = hash_password(payload.new_password)
+        settings.last_password_changed_at = datetime.now(timezone.utc)
         await self._session.commit()
 
     async def _get_or_create_settings(self, *, for_update: bool = False) -> tuple[UserSettings, bool]:
