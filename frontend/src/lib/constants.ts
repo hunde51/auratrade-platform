@@ -18,4 +18,5 @@ export const NAV_ITEMS = [
   { label: 'Markets', path: '/markets', icon: 'TrendingUp' },
   { label: 'Trade', path: '/trade', icon: 'ArrowLeftRight' },
   { label: 'AI Insights', path: '/ai', icon: 'Brain' },
+  { label: 'Settings', path: '/settings', icon: 'Settings' },
 ] as const;

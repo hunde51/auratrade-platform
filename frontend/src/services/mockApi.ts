@@ -118,6 +118,32 @@ type CandleResponse = {
   volume: number;
 };
 
+export type UserSettings = {
+  username: string;
+  email: string;
+  defaultOrderType: "market" | "limit";
+  defaultOrderQuantity: number;
+  notifyTradeConfirmations: boolean;
+  notifyWalletUpdates: boolean;
+  notifyOrderStatusChanges: boolean;
+  notifyPriceAlerts: boolean;
+  preferredSymbols: string[];
+  preferredTimeframe: "1h" | "4h" | "1d" | "1w";
+};
+
+type UserSettingsResponse = {
+  username: string;
+  email: string;
+  default_order_type: "market" | "limit";
+  default_order_quantity: string | number;
+  notify_trade_confirmations: boolean;
+  notify_wallet_updates: boolean;
+  notify_order_status_changes: boolean;
+  notify_price_alerts: boolean;
+  preferred_symbols: string[];
+  preferred_timeframe: "1h" | "4h" | "1d" | "1w";
+};
+
 const symbolNameMap = new Map(SYMBOLS.map((item) => [item.symbol.replace("/", ""), item.name]));
 
 function toNumber(value: string | number | null | undefined): number {
@@ -384,4 +410,64 @@ export async function getCandles(symbol: string, points = 72, timeframe: '1h' | 
     close: row.close,
     volume: row.volume,
   }));
+}
+
+function mapUserSettings(data: UserSettingsResponse): UserSettings {
+  return {
+    username: data.username,
+    email: data.email,
+    defaultOrderType: data.default_order_type,
+    defaultOrderQuantity: toNumber(data.default_order_quantity),
+    notifyTradeConfirmations: data.notify_trade_confirmations,
+    notifyWalletUpdates: data.notify_wallet_updates,
+    notifyOrderStatusChanges: data.notify_order_status_changes,
+    notifyPriceAlerts: data.notify_price_alerts,
+    preferredSymbols: data.preferred_symbols ?? [],
+    preferredTimeframe: data.preferred_timeframe,
+  };
+}
+
+export async function getUserSettings(): Promise<UserSettings> {
+  const data = await apiRequest<UserSettingsResponse>("/settings");
+  return mapUserSettings(data);
+}
+
+export async function updateUserSettings(payload: {
+  username?: string;
+  defaultOrderType?: "market" | "limit";
+  defaultOrderQuantity?: number;
+  notifyTradeConfirmations?: boolean;
+  notifyWalletUpdates?: boolean;
+  notifyOrderStatusChanges?: boolean;
+  notifyPriceAlerts?: boolean;
+  preferredSymbols?: string[];
+  preferredTimeframe?: "1h" | "4h" | "1d" | "1w";
+}): Promise<UserSettings> {
+  const requestBody = {
+    username: payload.username,
+    default_order_type: payload.defaultOrderType,
+    default_order_quantity: payload.defaultOrderQuantity,
+    notify_trade_confirmations: payload.notifyTradeConfirmations,
+    notify_wallet_updates: payload.notifyWalletUpdates,
+    notify_order_status_changes: payload.notifyOrderStatusChanges,
+    notify_price_alerts: payload.notifyPriceAlerts,
+    preferred_symbols: payload.preferredSymbols,
+    preferred_timeframe: payload.preferredTimeframe,
+  };
+
+  const data = await apiRequest<UserSettingsResponse>("/settings", {
+    method: "PATCH",
+    body: JSON.stringify(requestBody),
+  });
+  return mapUserSettings(data);
+}
+
+export async function changePassword(currentPassword: string, newPassword: string): Promise<void> {
+  await apiRequest<void>("/settings/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      current_password: currentPassword,
+      new_password: newPassword,
+    }),
+  });
 }
