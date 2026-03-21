@@ -4,6 +4,7 @@ from app.models.sentiment import SentimentLabel, SentimentSignal
 from app.models.trade import Trade
 from app.models.transaction import Transaction, TransactionType
 from app.models.user import User, UserRole
+from app.models.user_settings import UserSettings
 from app.models.wallet import Wallet
 
 __all__ = [
@@ -19,5 +20,6 @@ __all__ = [
     "TransactionType",
     "User",
     "UserRole",
+    "UserSettings",
     "Wallet",
 ]

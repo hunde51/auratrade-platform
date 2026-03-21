@@ -2,6 +2,7 @@
 
 from app.repositories.transaction import create_transaction, list_transactions_for_wallet
 from app.repositories.user import create_user, get_user_by_email
+from app.repositories.user_settings import create_user_settings, get_user_settings
 from app.repositories.wallet import (
 	create_wallet,
 	get_wallet_by_user_id,
@@ -18,4 +19,6 @@ __all__ = [
 	"wallet_for_update_query",
 	"create_transaction",
 	"list_transactions_for_wallet",
+	"get_user_settings",
+	"create_user_settings",
 ]
