@@ -27,6 +27,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     wallet = relationship("Wallet", back_populates="user", uselist=False)
+    settings = relationship("UserSettings", back_populates="user", uselist=False)
     orders = relationship("Order", back_populates="user")
     trades = relationship("Trade", back_populates="user")
     positions = relationship("Position", back_populates="user")
