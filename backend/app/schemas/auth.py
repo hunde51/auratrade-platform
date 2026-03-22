@@ -1,5 +1,7 @@
 from pydantic import BaseModel, Field
 
+from app.schemas.order import OrderResponse
+
 
 class RegisterRequest(BaseModel):
     email: str
@@ -23,3 +25,11 @@ class UserResponse(BaseModel):
     username: str
     role: str
     is_active: bool
+
+
+class UserWithNestedOrders(UserResponse):
+    orders: list[OrderResponse]
+
+
+class UserWithOrdersResponse(BaseModel):
+    user: UserWithNestedOrders
