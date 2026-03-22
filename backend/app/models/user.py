@@ -28,6 +28,7 @@ class User(Base):
 
     wallet = relationship("Wallet", back_populates="user", uselist=False)
     settings = relationship("UserSettings", back_populates="user", uselist=False)
+    alert_rules = relationship("AlertRule", back_populates="user")
     orders = relationship("Order", back_populates="user")
     trades = relationship("Trade", back_populates="user")
     positions = relationship("Position", back_populates="user")

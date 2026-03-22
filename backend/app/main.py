@@ -24,6 +24,7 @@ from app.core.monitoring import metrics_registry
 from app.core.request_context import set_request_id
 from app.core.redis import check_redis_connection, close_redis_connection, redis_client
 from app.schemas.market import MarketQuote, MarketSnapshotEvent, TickerUpdateEvent
+from app.services.alert_rule_service import alert_rule_evaluator
 from app.services.market_data_service import market_data_service
 from app.services.notification_service import notification_service
 from app.services.websocket_manager import ws_market_manager
@@ -51,7 +52,8 @@ def _validate_runtime_security_config() -> None:
 
 async def publish_market_updates() -> None:
     """Scheduled job that refreshes provider data and publishes it to Redis channels."""
-    await market_data_service.poll_and_publish()
+    quotes = await market_data_service.poll_and_publish()
+    await alert_rule_evaluator.evaluate_quotes([(quote.symbol, float(quote.price)) for quote in quotes])
 
 
 async def sync_ws_connection_count() -> None:
