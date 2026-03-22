@@ -1,4 +1,6 @@
 import type {
+  AlertRule,
+  AlertTriggerEvent,
   AIInsight,
   CandleData,
   MarketPrice,
@@ -116,6 +118,37 @@ type CandleResponse = {
   low: number;
   close: number;
   volume: number;
+};
+
+type AlertRuleResponse = {
+  id: number;
+  user_id: number;
+  symbol: string;
+  condition_type: "price_above" | "price_below" | "percent_drop";
+  threshold: string | number;
+  window_minutes: number;
+  action_type: "notify" | "place_order";
+  action_payload: Record<string, unknown>;
+  enabled: boolean;
+  cooldown_seconds: number;
+  last_triggered_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+type AlertTriggerEventResponse = {
+  id: number;
+  rule_id: number;
+  user_id: number;
+  action_type: string;
+  status: string;
+  details: Record<string, unknown>;
+  triggered_at: string;
+};
+
+type AlertRulesListResponse = {
+  items: AlertRuleResponse[];
+  recent_events: AlertTriggerEventResponse[];
 };
 
 export type UserSettings = {
@@ -469,5 +502,110 @@ export async function changePassword(currentPassword: string, newPassword: strin
       current_password: currentPassword,
       new_password: newPassword,
     }),
+  });
+}
+
+function mapAlertRule(row: AlertRuleResponse): AlertRule {
+  return {
+    id: String(row.id),
+    symbol: row.symbol,
+    conditionType: row.condition_type,
+    threshold: toNumber(row.threshold),
+    windowMinutes: row.window_minutes,
+    actionType: row.action_type,
+    actionPayload: row.action_payload ?? {},
+    enabled: row.enabled,
+    cooldownSeconds: row.cooldown_seconds,
+    lastTriggeredAt: row.last_triggered_at ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function mapAlertEvent(row: AlertTriggerEventResponse): AlertTriggerEvent {
+  return {
+    id: String(row.id),
+    ruleId: String(row.rule_id),
+    actionType: row.action_type,
+    status: row.status,
+    details: row.details ?? {},
+    triggeredAt: row.triggered_at,
+  };
+}
+
+export async function getAlertRules(): Promise<{ items: AlertRule[]; recentEvents: AlertTriggerEvent[] }> {
+  const data = await apiRequest<AlertRulesListResponse>("/alerts");
+  return {
+    items: data.items.map(mapAlertRule),
+    recentEvents: data.recent_events.map(mapAlertEvent),
+  };
+}
+
+export async function createAlertRule(payload: {
+  symbol: string;
+  conditionType: "price_above" | "price_below" | "percent_drop";
+  threshold: number;
+  windowMinutes: number;
+  actionType: "notify" | "place_order";
+  actionPayload?: Record<string, unknown>;
+  enabled: boolean;
+  cooldownSeconds: number;
+}): Promise<AlertRule> {
+  const data = await apiRequest<AlertRuleResponse>("/alerts", {
+    method: "POST",
+    body: JSON.stringify({
+      symbol: payload.symbol,
+      condition_type: payload.conditionType,
+      threshold: payload.threshold,
+      window_minutes: payload.windowMinutes,
+      action_type: payload.actionType,
+      action_payload: payload.actionPayload ?? {},
+      enabled: payload.enabled,
+      cooldown_seconds: payload.cooldownSeconds,
+    }),
+  });
+  return mapAlertRule(data);
+}
+
+export async function updateAlertRule(
+  ruleId: string,
+  payload: Partial<{
+    symbol: string;
+    conditionType: "price_above" | "price_below" | "percent_drop";
+    threshold: number;
+    windowMinutes: number;
+    actionType: "notify" | "place_order";
+    actionPayload: Record<string, unknown>;
+    enabled: boolean;
+    cooldownSeconds: number;
+  }>
+): Promise<AlertRule> {
+  const data = await apiRequest<AlertRuleResponse>(`/alerts/${encodeURIComponent(ruleId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({
+      symbol: payload.symbol,
+      condition_type: payload.conditionType,
+      threshold: payload.threshold,
+      window_minutes: payload.windowMinutes,
+      action_type: payload.actionType,
+      action_payload: payload.actionPayload,
+      enabled: payload.enabled,
+      cooldown_seconds: payload.cooldownSeconds,
+    }),
+  });
+  return mapAlertRule(data);
+}
+
+export async function toggleAlertRule(ruleId: string, enabled: boolean): Promise<AlertRule> {
+  const data = await apiRequest<AlertRuleResponse>(`/alerts/${encodeURIComponent(ruleId)}/toggle`, {
+    method: "POST",
+    body: JSON.stringify({ enabled }),
+  });
+  return mapAlertRule(data);
+}
+
+export async function deleteAlertRule(ruleId: string): Promise<void> {
+  await apiRequest<void>(`/alerts/${encodeURIComponent(ruleId)}`, {
+    method: "DELETE",
   });
 }

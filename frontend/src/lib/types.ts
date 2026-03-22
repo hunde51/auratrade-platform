@@ -110,6 +110,33 @@ export interface NewsItem {
   timestamp: string;
 }
 
+export type AlertConditionType = 'price_above' | 'price_below' | 'percent_drop';
+export type AlertActionType = 'notify' | 'place_order';
+
+export interface AlertRule {
+  id: string;
+  symbol: string;
+  conditionType: AlertConditionType;
+  threshold: number;
+  windowMinutes: number;
+  actionType: AlertActionType;
+  actionPayload: Record<string, unknown>;
+  enabled: boolean;
+  cooldownSeconds: number;
+  lastTriggeredAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertTriggerEvent {
+  id: string;
+  ruleId: string;
+  actionType: string;
+  status: string;
+  details: Record<string, unknown>;
+  triggeredAt: string;
+}
+
 export interface AdminStats {
   totalUsers: number;
   totalTrades: number;
