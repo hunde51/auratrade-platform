@@ -4,12 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { NAV_ITEMS, APP_NAME } from '@/lib/constants';
 import {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, LogOut, X, Settings,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, LogOut, X, Settings, BellRing,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const iconMap: Record<string, React.ElementType> = {
-  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, Settings,
+  LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, Settings, BellRing,
 };
 
 type NotificationItem = {
