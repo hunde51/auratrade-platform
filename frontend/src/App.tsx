@@ -13,6 +13,7 @@ import DashboardPage from "./pages/Dashboard";
 import MarketsPage from "./pages/Markets";
 import TradePage from "./pages/Trade";
 import AIPage from "./pages/AI";
+import AlertsPage from "./pages/Alerts";
 import SettingsPage from "./pages/Settings";
 import AdminPage from "./pages/Admin";
 import AdminLayout from "./pages/AdminLayout";
@@ -145,6 +146,7 @@ function AppRoutes() {
         <Route path="/markets" element={<MarketsPage />} />
         <Route path="/trade" element={<TradePage />} />
         <Route path="/ai" element={<AIPage />} />
+        <Route path="/alerts" element={<AlertsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
       </Route>
       <Route path="*" element={<NotFound />} />
