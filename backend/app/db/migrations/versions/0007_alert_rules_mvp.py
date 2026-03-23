@@ -10,6 +10,7 @@ from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "0007_alert_rules_mvp"
@@ -20,6 +21,20 @@ depends_on: str | Sequence[str] | None = None
 
 alert_condition_type = sa.Enum("price_above", "price_below", "percent_drop", name="alert_condition_type")
 alert_action_type = sa.Enum("notify", "place_order", name="alert_action_type")
+
+alert_condition_type_existing = postgresql.ENUM(
+    "price_above",
+    "price_below",
+    "percent_drop",
+    name="alert_condition_type",
+    create_type=False,
+)
+alert_action_type_existing = postgresql.ENUM(
+    "notify",
+    "place_order",
+    name="alert_action_type",
+    create_type=False,
+)
 
 
 def upgrade() -> None:
@@ -32,10 +47,10 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), primary_key=True),
         sa.Column("user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
         sa.Column("symbol", sa.String(length=50), nullable=False),
-        sa.Column("condition_type", alert_condition_type, nullable=False),
+        sa.Column("condition_type", alert_condition_type_existing, nullable=False),
         sa.Column("threshold", sa.Numeric(18, 6), nullable=False),
         sa.Column("window_minutes", sa.Integer(), nullable=False, server_default="15"),
-        sa.Column("action_type", alert_action_type, nullable=False),
+        sa.Column("action_type", alert_action_type_existing, nullable=False),
         sa.Column("action_payload", sa.JSON(), nullable=False, server_default=sa.text("'{}'::json")),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.true()),
         sa.Column("cooldown_seconds", sa.Integer(), nullable=False, server_default="120"),
