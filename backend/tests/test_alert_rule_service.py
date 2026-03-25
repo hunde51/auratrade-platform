@@ -13,7 +13,7 @@ class DummySession:
 
 
 class StubRedisForHistory:
-    async def zrangebyscore(self, key: str, start: int, end: int, **kwargs):  # noqa: ARG002
+    async def zrangebyscore(self, *args, **kwargs):  # noqa: ARG002
         # baseline 100.0 at window start
         return ["100.0:1700000000"]
 
@@ -119,3 +119,6 @@ def test_validated_action_payload_notify_returns_empty() -> None:
     service = AlertRuleService(DummySession(), User(id=1, email="u@test.com", username="u_test", password_hash="x"))
     output = service._validated_action_payload(AlertActionType.NOTIFY, {"ignored": True})
     assert output == {}
+
+
+
