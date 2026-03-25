@@ -7,6 +7,7 @@ import {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, LogOut, X, Settings, BellRing,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getAccessToken, getApiBaseUrl } from '@/services/http';
 
 const iconMap: Record<string, React.ElementType> = {
   LayoutDashboard, TrendingUp, ArrowLeftRight, Brain, Shield, Settings, BellRing,
@@ -19,6 +20,51 @@ type NotificationItem = {
   timestamp: string;
   read: boolean;
 };
+
+type UserNotificationEvent = {
+  event_type?: string;
+  data?: Record<string, unknown>;
+  timestamp?: string;
+};
+
+function toWebSocketUrl(apiBaseUrl: string): string {
+  const url = new URL(apiBaseUrl);
+  const wsProtocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return `${wsProtocol}//${url.host}/ws/user`;
+}
+
+function mapUserEventToNotification(payload: UserNotificationEvent): NotificationItem {
+  const eventType = payload.event_type ?? 'notification';
+  const data = payload.data ?? {};
+  const symbol = typeof data.symbol === 'string' ? data.symbol : undefined;
+
+  let title = 'Notification';
+  let description = 'You have a new event.';
+
+  if (eventType === 'price_alert') {
+    title = symbol ? `Price alert: ${symbol}` : 'Price alert';
+    const direction = typeof data.direction === 'string' ? data.direction : 'movement';
+    const change = typeof data.change_percent === 'number' ? `${data.change_percent.toFixed(2)}%` : undefined;
+    description = change ? `${direction} ${change}` : 'Price threshold reached';
+  } else if (eventType === 'order_filled') {
+    title = symbol ? `Order filled: ${symbol}` : 'Order filled';
+    description = 'A paper trade order has been filled.';
+  } else if (eventType === 'trade_confirmed') {
+    title = symbol ? `Trade confirmed: ${symbol}` : 'Trade confirmed';
+    description = 'Trade execution has been confirmed.';
+  } else if (eventType === 'wallet_updated') {
+    title = 'Wallet updated';
+    description = 'Your paper wallet balance changed.';
+  }
+
+  return {
+    id: `${eventType}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    description,
+    timestamp: typeof payload.timestamp === 'string' ? payload.timestamp : new Date().toISOString(),
+    read: false,
+  };
+}
 
 export function Navbar() {
   const user = useUserStore((s) => s.user);
@@ -41,20 +87,45 @@ export function Navbar() {
 
     setNotifications([
       {
-        id: 'notif-1',
+        id: 'notif-welcome',
         title: 'Welcome back',
         description: `Signed in as ${user.name}`,
         timestamp: new Date().toISOString(),
         read: false,
       },
-      {
-        id: 'notif-2',
-        title: 'Market stream active',
-        description: 'Realtime market feed is connected.',
-        timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
-        read: false,
-      },
     ]);
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+
+    const token = getAccessToken();
+    if (!token) {
+      return;
+    }
+
+    const wsUrl = `${toWebSocketUrl(getApiBaseUrl())}?token=${encodeURIComponent(token)}`;
+    const ws = new WebSocket(wsUrl);
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data) as UserNotificationEvent;
+        const nextNotification = mapUserEventToNotification(payload);
+        setNotifications((current) => [nextNotification, ...current].slice(0, 50));
+
+        if (payload.event_type === 'price_alert' && payload.data?.source === 'alert_rule') {
+          window.dispatchEvent(new CustomEvent('auratrade:alerts-updated'));
+        }
+      } catch {
+        // Ignore malformed websocket payloads.
+      }
+    };
+
+    return () => {
+      ws.close();
+    };
   }, [user]);
 
   useEffect(() => {

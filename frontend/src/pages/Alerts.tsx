@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -40,6 +40,15 @@ const AUTO_ORDER_RATE_LIMIT_PER_MINUTE = 5;
 export default function AlertsPage() {
   const queryClient = useQueryClient();
   const alertsQuery = useQuery({ queryKey: ["alert-rules"], queryFn: getAlertRules });
+
+  useEffect(() => {
+    const onAlertsUpdated = () => {
+      void queryClient.invalidateQueries({ queryKey: ["alert-rules"] });
+    };
+
+    window.addEventListener("auratrade:alerts-updated", onAlertsUpdated);
+    return () => window.removeEventListener("auratrade:alerts-updated", onAlertsUpdated);
+  }, [queryClient]);
 
   const [symbol, setSymbol] = useState("BTCUSD");
   const [conditionType, setConditionType] = useState<"price_above" | "price_below" | "percent_drop">("percent_drop");
