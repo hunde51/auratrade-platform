@@ -59,9 +59,15 @@ async def test_fallback_quote_when_providers_unavailable(monkeypatch: pytest.Mon
         return None
 
     monkeypatch.setattr("app.services.market_data_service.redis_client", fake_redis)
-    monkeypatch.setattr(service, "_fetch_from_alpaca", no_provider)
-    monkeypatch.setattr(service, "_fetch_from_polygon", no_provider)
-    monkeypatch.setattr(service, "_fetch_from_alpha_vantage", no_provider)
+    for name in (
+        "_fetch_from_coingecko",
+        "_fetch_from_coinbase",
+        "_fetch_from_alpaca_crypto",
+        "_fetch_from_alpaca",
+        "_fetch_from_polygon",
+        "_fetch_from_alpha_vantage",
+    ):
+        monkeypatch.setattr(service, name, no_provider)
 
     quotes = await service.poll_and_publish(["BTCUSD"])
 
