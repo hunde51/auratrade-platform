@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from sqlalchemy import func, select
@@ -22,7 +23,8 @@ class AdminStatsService:
             return cached
 
         total_users = await self._scalar_int(select(func.count(User.id)))
-        active_users = await self._scalar_int(select(func.count(func.distinct(Trade.user_id))).where(Trade.executed_at >= func.now() - func.make_interval(hours=24)))
+        since = datetime.now(timezone.utc) - timedelta(hours=24)
+        active_users = await self._scalar_int(select(func.count(func.distinct(Trade.user_id))).where(Trade.executed_at >= since))
         total_trades = await self._scalar_int(select(func.count(Trade.id)))
         total_positions = await self._scalar_int(select(func.count(Position.id)))
 

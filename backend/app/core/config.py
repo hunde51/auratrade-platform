@@ -89,6 +89,11 @@ class Settings(BaseSettings):
     auth_rate_limit_register_attempts: int = 8
     auth_rate_limit_window_seconds: int = 60
 
+    seed_admin_email: str = "admin@auratrade.dev"
+    seed_admin_password: str = "changeme"
+    seed_user_email: str = "demo@auratrade.dev"
+    seed_user_password: str = "changeme"
+
     model_config = SettingsConfigDict(env_file=str(_env_path), env_file_encoding="utf-8", extra="ignore")
 
     @property
