@@ -18,7 +18,9 @@ from time import perf_counter
 from app.api.router import api_router
 from app.api.websocket_routes import router as websocket_router
 from app.core.config import settings
-from app.core.database import check_database_connection, close_database_engine
+from app.core.database import Base, check_database_connection, close_database_engine
+from app.core.database import engine
+from app.models import *  # noqa: F401, F403
 from app.core.logging import configure_logging
 from app.core.monitoring import metrics_registry
 from app.core.request_context import set_request_id
@@ -103,6 +105,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     _validate_runtime_security_config()
 
     try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
         await check_database_connection()
         await check_redis_connection()
     except SQLAlchemyError as exc:
