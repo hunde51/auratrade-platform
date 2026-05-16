@@ -30,10 +30,12 @@ class Settings(BaseSettings):
     postgres_port: int = 5432
     postgres_db: str = "aura_ledger"
     db_echo_sql: bool = False
+    database_url_override: str | None = Field(default=None, alias="DATABASE_URL")  # reads Neon's DATABASE_URL automatically
 
     redis_host: str = "localhost"
     redis_port: int = 6379
     redis_db: int = 0
+    redis_url_override: str | None = Field(default=None, alias="REDIS_URL")  # reads platform's REDIS_URL automatically
     redis_channel_market_prices: str = "market_prices"
     redis_channel_ticker_updates: str = "ticker_updates"
     redis_channel_alerts: str = "alerts"
@@ -94,10 +96,16 @@ class Settings(BaseSettings):
     seed_user_email: str = "demo@auratrade.dev"
     seed_user_password: str = "changeme"
 
-    model_config = SettingsConfigDict(env_file=str(_env_path), env_file_encoding="utf-8", extra="ignore")
+    model_config = SettingsConfigDict(env_file=str(_env_path), env_file_encoding="utf-8", extra="ignore", populate_by_name=True)
 
     @property
     def database_url(self) -> str:
+        if self.database_url_override:
+            url = self.database_url_override
+            url = url.replace("postgresql://", "postgresql+asyncpg://").replace("postgres://", "postgresql+asyncpg://")
+            # asyncpg uses ?ssl=require, not ?sslmode=require
+            url = url.replace("sslmode=require", "ssl=require").replace("sslmode=prefer", "ssl=prefer").replace("sslmode=disable", "ssl=false")
+            return url
         encoded_password = quote_plus(self.postgres_password)
         return (
             f"postgresql+asyncpg://{self.postgres_user}:{encoded_password}"
@@ -106,6 +114,8 @@ class Settings(BaseSettings):
 
     @property
     def redis_url(self) -> str:
+        if self.redis_url_override:
+            return self.redis_url_override
         return f"redis://{self.redis_host}:{self.redis_port}/{self.redis_db}"
 
     @property
